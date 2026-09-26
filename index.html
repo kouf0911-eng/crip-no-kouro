@@ -74,12 +74,30 @@
   .item .ops button { border: 0; background: none; color: var(--muted); font-size: 18px; cursor: pointer; width: 32px; height: 36px; }
 
   /* 編集 */
-  #strip { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 10px; }
-  #strip img { width: 64px; height: 44px; object-fit: cover; border-radius: 6px; border: 2px solid transparent; flex: none; cursor: pointer; }
-  #strip img.sel { border-color: var(--accent); }
-  #ev { width: 100%; max-height: 34vh; background: #000; border-radius: 10px; display: block; }
-  .trim { display: grid; grid-template-columns: 36px 1fr 56px; gap: 8px; align-items: center; margin-top: 10px; }
-  .trim output { font-variant-numeric: tabular-nums; font-size: 13px; text-align: right; }
+  .count { font-weight: 500; letter-spacing: 0; margin-left: 6px; color: var(--muted); }
+  .count.warn { color: #d9480f; font-weight: 700; }
+  #timeline { display: flex; gap: 4px; overflow-x: auto; padding: 2px 0 8px; margin-bottom: 8px; }
+  .cut { position: relative; flex: none; height: 60px; border-radius: 8px; border: 2px solid transparent; padding: 0;
+    background: #333 center / cover no-repeat; color: #fff; font: inherit; cursor: pointer; text-shadow: 0 1px 3px rgba(0,0,0,.9); }
+  .cut.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+  .cut .n { position: absolute; left: 4px; top: 2px; font-size: 11px; font-weight: 700; }
+  .cut .d { position: absolute; right: 4px; bottom: 2px; font-size: 11px; }
+  .cut.add { width: 48px; background: none; border: 2px dashed var(--line); color: var(--muted); font-size: 22px; text-shadow: none; }
+  #ev { width: 100%; max-height: 30vh; background: #000; border-radius: 10px; display: block; }
+  #trimbar { position: relative; height: 56px; margin: 14px 12px 0; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #trimThumbs { display: flex; height: 100%; border-radius: 6px; overflow: hidden; background: #222; }
+  #trimThumbs img { flex: 1; min-width: 0; height: 100%; object-fit: cover; pointer-events: none; }
+  #trimbar .shade { position: absolute; top: 0; bottom: 0; background: rgba(0,0,0,.62); pointer-events: none; }
+  #range { position: absolute; top: -3px; bottom: -3px; border: 3px solid var(--accent); border-left: 0; border-right: 0; pointer-events: none; }
+  #trimbar .handle { position: absolute; top: -3px; bottom: -3px; width: 22px; margin-left: -11px; background: var(--accent); border-radius: 6px; touch-action: none; cursor: ew-resize; }
+  #trimbar .handle::after { content: ''; position: absolute; left: 9px; top: 18px; bottom: 18px; width: 4px; border-radius: 2px; background: rgba(255,255,255,.85); }
+  #playhead { position: absolute; top: -6px; bottom: -6px; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 3px #000; pointer-events: none; }
+  .segctl { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .segctl button { flex: 1; min-height: 38px; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; }
+  .segctl button + button { border-left: 1px solid var(--line); }
+  .segctl button.on { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .warnbox { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: var(--sel); border: 1px solid var(--accent); border-radius: 10px; padding: 10px; margin-bottom: 10px; font-size: 13px; }
+  nav.tabbar button.busy i::after { content: '●'; color: var(--accent); font-size: 10px; vertical-align: top; margin-left: 2px; }
 
   /* テンプレート */
   #gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
@@ -120,55 +138,79 @@
     <!-- 1. 素材 -->
     <section class="tab" data-tab="clips">
       <div class="panel">
-        <h2>素材</h2>
+        <h2>素材 <span id="count" class="count"></span></h2>
         <button class="btn primary big" id="addBtn">＋ 写真アプリから動画をえらぶ</button>
         <input id="files" type="file" accept="video/*" multiple hidden>
+        <p class="hint">最大15本まで。何回かに分けて追加しても大丈夫です。</p>
         <div id="list"></div>
         <div class="btns" style="margin-top:10px">
           <button class="btn small" id="sortBtn" disabled>撮影日順に並べる</button>
         </div>
-        <p class="hint">チェックを外したクリップは使いません。↑↓で順番を入れ替えます。</p>
       </div>
       <div class="panel">
         <h2>おまかせ編集</h2>
-        <div class="row"><label for="target">全体の長さ</label>
+        <div class="row"><label for="target">仕上がりの長さ</label>
           <select id="target">
+            <option value="none">指定しない（全部つなぐ）</option>
             <option value="15">15秒</option>
             <option value="30" selected>30秒</option>
+            <option value="45">45秒</option>
             <option value="60">1分</option>
             <option value="90">1分30秒</option>
             <option value="180">3分</option>
           </select></div>
-        <div class="btns">
-          <button class="btn primary" id="autoBtn" disabled>見どころを自動でつなぐ</button>
-          <button class="btn" id="resetBtn" disabled>元に戻す</button>
-        </div>
-        <p class="hint">各クリップから動きの多い場面を探して、全体の長さに収まるよう切り出します。あとから「編集」タブで手直しできます。</p>
+        <div class="row"><label for="pace">カットの長さ</label>
+          <select id="pace">
+            <option value="slow">ゆったり（6秒前後）</option>
+            <option value="normal" selected>ふつう（3〜4秒）</option>
+            <option value="fast">テンポよく（2秒前後）</option>
+          </select></div>
+        <button class="btn primary big" id="autoBtn" disabled>✨ この長さで自動編集する</button>
+        <p class="hint">チェックの入った素材から動きの多い場面を探して切り出し、指定の長さぴったりにつなぎます。長い動画からは複数の場面を使います。結果は「編集」タブで1カットずつ直せます。</p>
       </div>
     </section>
 
     <!-- 2. 編集 -->
     <section class="tab" data-tab="edit" hidden>
+      <div class="panel">
+        <h2>タイムライン <span id="tlInfo" class="count"></span></h2>
+        <div id="timeline"></div>
+        <div class="btns" id="segOps">
+          <button class="btn small" data-op="left">◀ 前へ</button>
+          <button class="btn small" data-op="right">後へ ▶</button>
+          <button class="btn small" data-op="split">✂︎ 今の位置で分割</button>
+          <button class="btn small" data-op="dup">複製</button>
+          <button class="btn small" data-op="del">削除</button>
+        </div>
+      </div>
       <div class="panel" id="editor">
-        <h2>クリップの編集</h2>
-        <div id="strip"></div>
+        <h2>カットの編集</h2>
         <div id="editBody">
           <video id="ev" controls playsinline preload="auto"></video>
-          <div class="trim">
-            <span>開始</span><input id="inR" type="range" min="0" step="0.05"><output id="inO"></output>
-            <span>終了</span><input id="outR" type="range" min="0" step="0.05"><output id="outO"></output>
+          <div id="trimbar">
+            <div id="trimThumbs"></div>
+            <div class="shade" id="shadeL" style="left:0"></div>
+            <div class="shade" id="shadeR" style="right:0"></div>
+            <div id="range"></div>
+            <div class="handle" id="hIn"></div>
+            <div class="handle" id="hOut"></div>
+            <div id="playhead"></div>
           </div>
-          <div class="btns" style="margin:8px 0 12px">
+          <p class="hint" id="trimInfo" style="margin:6px 0 10px"></p>
+          <div class="btns" style="margin-bottom:12px">
             <button class="btn small" id="setIn">今の位置を開始に</button>
             <button class="btn small" id="setOut">今の位置を終了に</button>
-            <button class="btn small" id="playSeg">区間を再生</button>
+            <button class="btn small" id="playSeg">▶ このカットを再生</button>
           </div>
-          <p class="hint" id="segLen" style="margin:-4px 0 12px"></p>
+          <div class="row"><span>速さ</span>
+            <div class="segctl" id="speed">
+              <button data-v="0.5">0.5x</button><button data-v="1">1x</button><button data-v="1.5">1.5x</button><button data-v="2">2x</button>
+            </div></div>
           <div class="row"><label for="cap">テロップ</label><input id="cap" type="text" placeholder="例：朝の散歩"></div>
           <div class="row"><label for="dt">撮影日時</label><input id="dt" type="datetime-local"></div>
           <p class="hint" id="dtSrc" style="margin:-6px 0 8px"></p>
           <label class="check"><input id="showDate" type="checkbox"> 撮影日を表示する</label>
-          <label class="check"><input id="mute" type="checkbox"> このクリップの元の音を消す</label>
+          <label class="check"><input id="mute" type="checkbox"> このカットの元の音を消す</label>
         </div>
         <p class="empty" id="editEmpty">「素材」タブで動画を追加してください</p>
       </div>
@@ -253,9 +295,13 @@
       </div>
       <div class="panel">
         <h2>書き出し</h2>
+        <div class="warnbox" id="lenWarn" hidden>
+          <span id="lenWarnText"></span>
+          <button class="btn small" id="fitBtn">目標の長さに合わせる</button>
+        </div>
         <button class="btn primary big" id="rec" disabled>● 動画を書き出す</button>
         <div id="result"></div>
-        <p class="hint">再生と同じ時間がかかります（30秒の動画なら30秒）。書き出し中は画面を消したり、ほかのアプリに切り替えたりしないでください。</p>
+        <p class="hint">再生と同じ時間がかかります（30秒の動画なら30秒）。書き出し中もアプリ内のほかのタブは自由に使えます。ほかのアプリに切り替えると一時停止し、戻ってから「▶ 続きから」で再開できます。</p>
       </div>
     </section>
   </main>
@@ -276,10 +322,14 @@ const ev = $('ev');
 const FPS = 30;
 $('height').value = matchMedia('(max-width: 800px)').matches ? '720' : '1080';
 
-// clip: { id, name, url, duration, w, h, date, dateSource, caption, showDate, mute, include, in, out, thumb, frame, scores, step }
+// clips: 読み込んだ素材の動画 { id, name, url, duration, w, h, date, dateSource, include, thumb, frame, strip, scores, step }
+// segs : タイムライン上のカット（1本の素材から何カットでも切り出せる）
+const MAX_CLIPS = 15;
 let clips = [];
-let selId = null;
+let segs = [];
+let selSeg = null;
 let nextId = 1;
+let tlManual = false;   // 手で編集したら true（おまかせの自動調整を止める）
 let bgmFiles = [];
 let running = null;
 let tplId = 'natural';
@@ -307,24 +357,32 @@ function once(el, evName, timeout = 15000) {
   });
 }
 
-function seekTo(v, t) {
+function seekTo(v, t, timeout = 3000) {
   return new Promise((res) => {
-    const timer = setTimeout(done, 3000);
-    function done() { clearTimeout(timer); v.removeEventListener('seeked', done); res(); }
+    const timer = setTimeout(() => { v.removeEventListener('seeked', done); res(false); }, timeout);
+    function done() { clearTimeout(timer); v.removeEventListener('seeked', done); res(true); }
     v.addEventListener('seeked', done);
     v.currentTime = t;
   });
 }
 
-function hiddenVideo(url) {
+// 作業用の動画。iPhoneは画面外の動画を読み込まない/再生しないことがあるので、プレビューの真裏（画面内）に置く
+function scratchVideo(url) {
   const v = document.createElement('video');
   v.muted = true;
   v.playsInline = true;
   v.setAttribute('playsinline', '');
+  v.setAttribute('muted', '');
   v.preload = 'auto';
   v.src = url;
-  $('hidden').appendChild(v);
+  $('players').appendChild(v);
   return v;
+}
+
+// 使い終わった動画はデコーダーごと解放する（残すとiPhoneで数本目から読み込めなくなる）
+function freeVideo(v) {
+  try { v.pause(); v.removeAttribute('src'); v.load(); } catch {}
+  v.remove();
 }
 
 // iPhoneは一度再生しないとフレームを描けないことがあるので、ミュートで一瞬再生して止める
@@ -1177,7 +1235,7 @@ function settings(overrideTpl) {
   const t = TPL[id];
   let aspect = $('aspect').value;
   if (aspect === 'auto') {
-    const used = clips.filter(c => c.include);
+    const used = segs.length ? segs.map(g => g.src) : clips;
     const portrait = used.filter(c => c.h > c.w).length;
     aspect = !used.length || portrait * 2 >= used.length ? '9:16' : '16:9';
   }
@@ -1196,8 +1254,8 @@ function settings(overrideTpl) {
 function timeline() {
   const s = settings();
   const t = TPL[s.tpl];
-  let items = clips.filter(c => c.include && c.out - c.in > 0.2)
-    .map((c, idx) => ({ kind: 'clip', clip: c, len: c.out - c.in, idx }));
+  let items = segs.filter(g => g.out - g.in > 0.1)
+    .map((g, idx) => ({ kind: 'clip', clip: g, len: g.len, idx }));
   if (items.length && t.cards) items = t.cards(items, s);
   let time = 0;
   items.forEach((g, i) => {
@@ -1216,38 +1274,68 @@ function showTab(name) {
   document.querySelectorAll('.tab').forEach(el => { el.hidden = el.dataset.tab !== name; });
   document.querySelectorAll('nav.tabbar button').forEach(b => b.classList.toggle('on', b.dataset.go === name));
   if (name === 'tpl') renderGallery();
-  if (name === 'edit') renderStrip();
+  if (name === 'edit') { renderTimeline(); renderTrim(); }
   window.scrollTo(0, 0);
 }
 document.querySelectorAll('nav.tabbar button').forEach(b => b.onclick = () => showTab(b.dataset.go));
 
+// ---------- カット（タイムラインの1区間） ----------
+const SEG_PROTO = {
+  get url() { return this.src.url; },
+  get date() { return this.src.date; },
+  get duration() { return this.src.duration; },
+  get len() { return (this.out - this.in) / this.speed; },
+};
+function makeSeg(clip, a, b, extra = {}) {
+  return Object.assign(Object.create(SEG_PROTO), {
+    id: nextId++, src: clip, in: a, out: b, speed: 1, caption: '', showDate: true, mute: false,
+  }, extra);
+}
+const targetLen = () => $('target').value === 'none' ? 0 : Number($('target').value);
+
 // ---------- 素材の追加 ----------
 $('addBtn').onclick = () => $('files').click();
 $('files').onchange = async (e) => {
-  const files = [...e.target.files];
+  let files = [...e.target.files];
   e.target.value = '';
+  const room = MAX_CLIPS - clips.length;
+  if (room <= 0) { alert(`素材は最大${MAX_CLIPS}本までです。いらない素材を削除してから追加してください。`); return; }
+  if (files.length > room) {
+    alert(`素材は最大${MAX_CLIPS}本までです。えらんだ中から先頭の${room}本を読み込みます。`);
+    files = files.slice(0, room);
+  }
+  $('addBtn').disabled = true;
+  const added = [], failed = [];
   for (const [i, f] of files.entries()) {
     setStatus(`読み込み中 ${i + 1} / ${files.length}：${f.name}`);
     try {
-      clips.push(await loadClip(f));
+      const c = await loadClip(f);
+      clips.push(c);
+      added.push(c);
     } catch {
-      alert(`${f.name} を読み込めませんでした。`);
+      failed.push(f.name);
     }
-    renderList();
+    renderLibrary();
   }
-  if (!selClip() && clips.length) select(clips[0].id);
+  $('addBtn').disabled = false;
+  if (failed.length) alert(`読み込めなかった動画があります：\n${failed.join('\n')}`);
+  if (added.length) {
+    if (targetLen() && !tlManual) await autoEdit();
+    else added.forEach(c => segs.push(makeSeg(c, 0, c.duration)));
+    if (!selSeg && segs.length) selectSeg(segs[0]);
+  }
   refresh();
 };
 
 async function loadClip(file) {
   const url = URL.createObjectURL(file);
-  const v = hiddenVideo(url);
+  const v = scratchVideo(url);
   try {
     if (v.readyState < 1) await once(v, 'loadedmetadata');
-    await primeVideo(v);
     const duration = v.duration;
     if (!isFinite(duration) || duration <= 0) throw new Error('duration');
-    await seekTo(v, Math.min(0.5, duration / 2));
+    await primeVideo(v);
+    await seekTo(v, Math.min(0.5, duration / 2), 4000);
     const frame = document.createElement('canvas');
     frame.width = 360;
     frame.height = Math.round(360 * v.videoHeight / v.videoWidth) || 202;
@@ -1257,212 +1345,405 @@ async function loadClip(file) {
       id: nextId++, name: file.name, url, duration, w: v.videoWidth, h: v.videoHeight,
       date: meta ? meta.date : new Date(file.lastModified),
       dateSource: meta ? meta.source : 'ファイルの日時（撮影日と違う場合は直してください）',
-      caption: '', showDate: true, mute: false, include: true,
-      in: 0, out: duration, frame, thumb: frame.toDataURL('image/jpeg', 0.7), scores: null, step: 0,
+      include: true, frame, thumb: frame.toDataURL('image/jpeg', 0.7), strip: null, scores: null, step: 0,
     };
   } catch (err) {
     URL.revokeObjectURL(url);
     throw err;
   } finally {
-    v.remove();
+    freeVideo(v);
   }
 }
 
-$('sortBtn').onclick = () => { clips.sort((a, b) => a.date - b.date); renderList(); refresh(); };
+$('sortBtn').onclick = () => {
+  segs.sort((a, b) => (a.date - b.date) || (a.in - b.in));
+  clips.sort((a, b) => a.date - b.date);
+  renderLibrary();
+  refresh();
+};
 
-function renderList() {
+function renderLibrary() {
   const list = $('list');
   list.innerHTML = '';
+  $('count').textContent = clips.length ? `${clips.length} / ${MAX_CLIPS}本` : '';
   clips.forEach((c, i) => {
+    const n = segs.filter(g => g.src === c).length;
     const el = document.createElement('div');
-    el.className = 'item' + (c.id === selId ? ' sel' : '') + (c.include ? '' : ' off');
+    el.className = 'item' + (c.include ? '' : ' off');
     el.innerHTML = `
-      <input type="checkbox" title="使う" ${c.include ? 'checked' : ''}>
+      <input type="checkbox" title="おまかせ編集で使う" ${c.include ? 'checked' : ''}>
       <img src="${c.thumb}" alt="">
-      <div class="meta"><b></b><span>${fmtDate(c.date, 'dothm')}<br>${fmtT(c.out - c.in)} / ${fmtT(c.duration)}</span></div>
-      <div class="ops"><button data-op="up" title="上へ">↑</button><button data-op="down" title="下へ">↓</button><button data-op="del" title="削除">×</button></div>`;
-    el.querySelector('b').textContent = c.caption || c.name;
-    el.querySelector('img').onclick = el.querySelector('.meta').onclick = () => { select(c.id); showTab('edit'); };
+      <div class="meta"><b></b><span>${fmtDate(c.date, 'dothm')} ・ ${fmtT(c.duration)}<br>${n ? `タイムラインで ${n}カット使用中` : 'タイムライン未使用'}</span></div>
+      <div class="ops"><button data-op="add" title="タイムラインの最後に追加">＋</button><button data-op="del" title="素材を削除">×</button></div>`;
+    el.querySelector('b').textContent = c.name;
+    el.querySelector('img').onclick = el.querySelector('.meta').onclick = () => {
+      const g = segs.find(x => x.src === c);
+      if (g) { selectSeg(g); showTab('edit'); }
+    };
     const cb = el.querySelector('input');
-    cb.onchange = () => { c.include = cb.checked; renderList(); refresh(); };
+    cb.onchange = () => { c.include = cb.checked; renderLibrary(); };
     el.querySelectorAll('button').forEach(b => b.onclick = () => {
-      const op = b.dataset.op;
-      if (op === 'up' && i > 0) [clips[i - 1], clips[i]] = [clips[i], clips[i - 1]];
-      if (op === 'down' && i < clips.length - 1) [clips[i + 1], clips[i]] = [clips[i], clips[i + 1]];
-      if (op === 'del') {
-        URL.revokeObjectURL(c.url);
-        clips.splice(i, 1);
-        if (selId === c.id) select(clips[0] ? clips[0].id : null);
+      if (b.dataset.op === 'add') {
+        const g = makeSeg(c, 0, c.duration);
+        segs.push(g);
+        tlManual = true;
+        selectSeg(g);
       }
-      renderList();
+      if (b.dataset.op === 'del') {
+        segs = segs.filter(g => g.src !== c);
+        clips.splice(i, 1);
+        URL.revokeObjectURL(c.url);
+        if (selSeg && selSeg.src === c) selectSeg(segs[0] || null);
+      }
+      renderLibrary();
       refresh();
     });
     list.appendChild(el);
   });
 }
 
-// ---------- クリップの編集 ----------
-const selClip = () => clips.find(c => c.id === selId) || null;
-
-function renderStrip() {
-  const strip = $('strip');
-  strip.innerHTML = '';
-  clips.forEach(c => {
-    const img = document.createElement('img');
-    img.src = c.thumb;
-    img.className = c.id === selId ? 'sel' : '';
-    img.onclick = () => select(c.id);
-    strip.appendChild(img);
+// ---------- タイムライン ----------
+function renderTimeline() {
+  const tl = $('timeline');
+  tl.innerHTML = '';
+  segs.forEach((g, i) => {
+    const b = document.createElement('button');
+    b.className = 'cut' + (g === selSeg ? ' sel' : '');
+    b.style.width = `${Math.round(clamp(g.len * 18, 64, 180))}px`;
+    b.style.backgroundImage = `url(${g.src.thumb})`;
+    b.innerHTML = `<span class="n">${i + 1}</span><span class="d">${g.len.toFixed(1)}秒${g.speed !== 1 ? ` ${g.speed}x` : ''}</span>`;
+    b.onclick = () => selectSeg(g);
+    tl.appendChild(b);
   });
+  const add = document.createElement('button');
+  add.className = 'cut add';
+  add.textContent = '＋';
+  add.onclick = () => $('files').click();
+  tl.appendChild(add);
+  const sel = tl.querySelector('.sel');
+  if (sel) sel.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  updateLengthInfo();
 }
 
-function select(id) {
-  selId = id;
-  const c = selClip();
-  $('editBody').hidden = !c;
-  $('editEmpty').hidden = !!c;
-  renderList();
-  renderStrip();
-  if (!c) { ev.removeAttribute('src'); ev.load(); drawStill(); return; }
-  if (ev.src !== c.url) {
-    ev.src = c.url;
-    ev.addEventListener('loadedmetadata', () => { ev.currentTime = c.in; }, { once: true });
-  } else {
-    ev.currentTime = c.in;
+function updateLengthInfo() {
+  const { total } = timeline();
+  const t = targetLen();
+  const off = t && Math.abs(total - t) > 0.5;
+  const txt = `合計 ${fmtT(total)}${t ? `（目標 ${fmtT(t)}）` : ''}`;
+  $('tlInfo').textContent = txt;
+  $('tlInfo').classList.toggle('warn', !!off);
+  $('lenWarn').hidden = !off || !segs.length;
+  $('lenWarnText').textContent = `今のタイムラインは ${fmtT(total)} です（目標 ${fmtT(t)}）。`;
+}
+
+document.querySelectorAll('#segOps button').forEach(b => b.onclick = () => {
+  const g = selSeg;
+  if (!g) return;
+  const i = segs.indexOf(g);
+  switch (b.dataset.op) {
+    case 'left': if (i > 0) [segs[i - 1], segs[i]] = [segs[i], segs[i - 1]]; break;
+    case 'right': if (i < segs.length - 1) [segs[i + 1], segs[i]] = [segs[i], segs[i + 1]]; break;
+    case 'split': {
+      const t = ev.currentTime;
+      if (t <= g.in + 0.3 || t >= g.out - 0.3) { alert('分割したい位置まで動画を進めてから押してください（カットの端から0.3秒以上内側）'); return; }
+      const g2 = makeSeg(g.src, t, g.out, { speed: g.speed, showDate: g.showDate, mute: g.mute });
+      g.out = t;
+      segs.splice(i + 1, 0, g2);
+      selectSeg(g2);
+      break;
+    }
+    case 'dup': {
+      const g2 = makeSeg(g.src, g.in, g.out, { speed: g.speed, caption: g.caption, showDate: g.showDate, mute: g.mute });
+      segs.splice(i + 1, 0, g2);
+      selectSeg(g2);
+      break;
+    }
+    case 'del':
+      segs.splice(i, 1);
+      selectSeg(segs[Math.min(i, segs.length - 1)] || null);
+      break;
   }
-  $('inR').max = $('outR').max = c.duration;
-  $('cap').value = c.caption;
-  $('dt').value = `${c.date.getFullYear()}-${pad(c.date.getMonth() + 1)}-${pad(c.date.getDate())}T${pad(c.date.getHours())}:${pad(c.date.getMinutes())}`;
-  $('dtSrc').textContent = `読み取り元：${c.dateSource}`;
-  $('showDate').checked = c.showDate;
-  $('mute').checked = c.mute;
-  syncTrim();
+  tlManual = true;
+  renderLibrary();
+  refresh();
+});
+
+// ---------- カットの編集 ----------
+function selectSeg(g) {
+  selSeg = g || null;
+  $('editBody').hidden = !g;
+  $('editEmpty').hidden = !!g;
+  renderTimeline();
+  if (!g) { ev.removeAttribute('src'); ev.load(); drawStill(); return; }
+  if (ev.src !== g.url) {
+    ev.src = g.url;
+    ev.addEventListener('loadedmetadata', () => { ev.currentTime = g.in; }, { once: true });
+  } else {
+    ev.currentTime = g.in;
+  }
+  ev.playbackRate = g.speed;
+  $('cap').value = g.caption;
+  const d = g.date;
+  $('dt').value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  $('dtSrc').textContent = `読み取り元：${g.src.dateSource}`;
+  $('showDate').checked = g.showDate;
+  $('mute').checked = g.mute;
+  document.querySelectorAll('#speed button').forEach(b => b.classList.toggle('on', Number(b.dataset.v) === g.speed));
+  renderTrim();
+  if (!g.src.strip) analyze(g.src, () => {}).then(() => { if (selSeg && selSeg.src === g.src) renderTrim(); }).catch(() => {});
   drawStill();
 }
 
-function syncTrim() {
-  const c = selClip();
-  if (!c) return;
-  $('inR').value = c.in;
-  $('outR').value = c.out;
-  $('inO').textContent = fmtT(c.in);
-  $('outO').textContent = fmtT(c.out);
-  $('segLen').textContent = `使う長さ ${fmtT(c.out - c.in)}（全体 ${fmtT(c.duration)}）`;
+function renderTrim() {
+  const g = selSeg;
+  if (!g) return;
+  const d = g.duration;
+  const thumbs = $('trimThumbs');
+  const strip = g.src.strip || [g.src.thumb];
+  if (thumbs.dataset.clip !== String(g.src.id) || thumbs.children.length !== strip.length) {
+    thumbs.innerHTML = strip.map(u => `<img src="${u}" alt="">`).join('');
+    thumbs.dataset.clip = g.src.id;
+  }
+  const a = g.in / d * 100, b = g.out / d * 100;
+  $('shadeL').style.width = `${a}%`;
+  $('shadeR').style.width = `${100 - b}%`;
+  $('hIn').style.left = `${a}%`;
+  $('hOut').style.left = `${b}%`;
+  $('range').style.left = `${a}%`;
+  $('range').style.width = `${b - a}%`;
+  $('trimInfo').textContent = `開始 ${fmtT(g.in)} ・ 終了 ${fmtT(g.out)} ・ 使う長さ ${g.len.toFixed(1)}秒${g.speed !== 1 ? `（${g.speed}倍速）` : ''} ／ 元の動画 ${fmtT(d)}`;
+  movePlayhead();
 }
 
-$('inR').oninput = () => { const c = selClip(); c.in = Math.min(+$('inR').value, c.out - 0.3); ev.currentTime = c.in; syncTrim(); };
-$('outR').oninput = () => { const c = selClip(); c.out = Math.max(+$('outR').value, c.in + 0.3); ev.currentTime = c.out; syncTrim(); };
-$('inR').onchange = $('outR').onchange = () => { renderList(); refresh(); };
-$('setIn').onclick = () => { const c = selClip(); c.in = Math.min(ev.currentTime, c.out - 0.3); syncTrim(); renderList(); refresh(); };
-$('setOut').onclick = () => { const c = selClip(); c.out = Math.max(ev.currentTime, c.in + 0.3); syncTrim(); renderList(); refresh(); };
-$('playSeg').onclick = () => { const c = selClip(); ev.currentTime = c.in; ev.play(); };
+function movePlayhead() {
+  const g = selSeg;
+  if (!g || !ev.duration) return;
+  $('playhead').style.left = `${ev.currentTime / g.duration * 100}%`;
+}
+
+// 端のつまみをドラッグして、使う範囲を決める
+let drag = null;
+function barTime(e) {
+  const r = $('trimbar').getBoundingClientRect();
+  return clamp((e.clientX - r.left) / r.width, 0, 1) * selSeg.duration;
+}
+for (const [id, which] of [['hIn', 'in'], ['hOut', 'out']]) {
+  const h = $(id);
+  h.addEventListener('pointerdown', (e) => { if (!selSeg) return; drag = which; h.setPointerCapture(e.pointerId); e.preventDefault(); e.stopPropagation(); ev.pause(); });
+  h.addEventListener('pointermove', (e) => {
+    if (drag !== which) return;
+    const g = selSeg, t = barTime(e);
+    if (which === 'in') g.in = Math.min(t, g.out - 0.3); else g.out = Math.max(t, g.in + 0.3);
+    ev.currentTime = which === 'in' ? g.in : g.out;
+    tlManual = true;
+    renderTrim();
+  });
+  const end = () => { if (drag !== which) return; drag = null; renderTimeline(); refresh(); };
+  h.addEventListener('pointerup', end);
+  h.addEventListener('pointercancel', end);
+}
+$('trimbar').addEventListener('pointerdown', (e) => { if (!selSeg || drag) return; ev.currentTime = barTime(e); });
+
+$('setIn').onclick = () => { const g = selSeg; g.in = Math.min(ev.currentTime, g.out - 0.3); tlManual = true; renderTrim(); renderTimeline(); refresh(); };
+$('setOut').onclick = () => { const g = selSeg; g.out = Math.max(ev.currentTime, g.in + 0.3); tlManual = true; renderTrim(); renderTimeline(); refresh(); };
+$('playSeg').onclick = () => { const g = selSeg; ev.currentTime = g.in; ev.playbackRate = g.speed; ev.play(); };
+document.querySelectorAll('#speed button').forEach(b => b.onclick = () => {
+  const g = selSeg;
+  if (!g) return;
+  g.speed = Number(b.dataset.v);
+  ev.playbackRate = g.speed;
+  tlManual = true;
+  document.querySelectorAll('#speed button').forEach(x => x.classList.toggle('on', x === b));
+  renderTrim();
+  renderTimeline();
+  refresh();
+});
+
 ev.addEventListener('timeupdate', () => {
-  const c = selClip();
-  if (c && !ev.paused && ev.currentTime >= c.out) ev.pause();
+  const g = selSeg;
+  if (g && !ev.paused && ev.currentTime >= g.out) ev.pause();
+  movePlayhead();
   drawStill();
 });
-ev.addEventListener('seeked', drawStill);
+ev.addEventListener('seeked', () => { movePlayhead(); drawStill(); });
+ev.addEventListener('loadeddata', drawStill);
 ev.addEventListener('play', function live() {
   if (ev.paused || running) return;
+  if (selSeg && ev.currentTime >= selSeg.out) { ev.pause(); return; }
+  movePlayhead();
   drawStill();
   requestAnimationFrame(live);
 });
-ev.addEventListener('loadeddata', drawStill);
-$('cap').oninput = () => { selClip().caption = $('cap').value; drawStill(); };
-$('cap').onchange = () => { renderList(); refresh(); };
+$('cap').oninput = () => { selSeg.caption = $('cap').value; drawStill(); };
+$('cap').onchange = () => refresh();
 $('dt').onchange = () => {
-  const c = selClip();
+  const c = selSeg.src;
   const d = new Date($('dt').value);
   if (!isNaN(d)) { c.date = d; c.dateSource = '手入力'; $('dtSrc').textContent = '読み取り元：手入力'; }
-  renderList();
+  renderLibrary();
   drawStill();
 };
-$('showDate').onchange = () => { selClip().showDate = $('showDate').checked; drawStill(); };
-$('mute').onchange = () => { selClip().mute = $('mute').checked; };
+$('showDate').onchange = () => { selSeg.showDate = $('showDate').checked; drawStill(); };
+$('mute').onchange = () => { selSeg.mute = $('mute').checked; };
 
-// ---------- おまかせ編集（動きの多い場面を探す） ----------
+// ---------- おまかせ編集 ----------
+// 素材を一定間隔で見て「動きの量」を点数にする。ついでにトリム用のコマ画像も作る
 async function analyze(c, onProgress) {
   if (c.scores) return;
-  const v = hiddenVideo(c.url);
-  try {
-    if (v.readyState < 1) await once(v, 'loadedmetadata');
-    await primeVideo(v);
-    const step = Math.max(0.25, c.duration / 100);
-    const W = 48, H = 27;
-    const ac = document.createElement('canvas');
-    ac.width = W; ac.height = H;
-    const ax = ac.getContext('2d', { willReadFrequently: true });
-    let prev = null;
-    const scores = [];
-    for (let t = 0; t < c.duration; t += step) {
-      await seekTo(v, t);
-      ax.drawImage(v, 0, 0, W, H);
-      const d = ax.getImageData(0, 0, W, H).data;
-      const cur = new Float32Array(W * H);
-      let diff = 0, lum = 0;
-      for (let k = 0, p = 0; k < cur.length; k++, p += 4) {
-        cur[k] = (d[p] * 3 + d[p + 1] * 6 + d[p + 2]) / 10;
-        lum += cur[k];
-        if (prev) diff += Math.abs(cur[k] - prev[k]);
+  if (c.analyzing) return c.analyzing;
+  c.analyzing = (async () => {
+    const v = scratchVideo(c.url);
+    try {
+      if (v.readyState < 1) await once(v, 'loadedmetadata');
+      await primeVideo(v);
+      const N = clamp(Math.round(c.duration * 2), 8, 40);
+      const step = c.duration / N;
+      const W = 48, H = 27;
+      const ac = document.createElement('canvas');
+      ac.width = W; ac.height = H;
+      const ax = ac.getContext('2d', { willReadFrequently: true });
+      const sc = document.createElement('canvas');
+      sc.width = 96; sc.height = Math.round(96 * (c.h || 9) / (c.w || 16));
+      const sx = sc.getContext('2d');
+      const strip = [], stripEvery = Math.max(1, Math.floor(N / 8));
+      let prev = null, misses = 0;
+      const scores = [];
+      for (let i = 0; i < N; i++) {
+        const t = Math.min(c.duration - 0.05, (i + 0.5) * step);
+        if (!(await seekTo(v, t, 1500))) misses++;
+        ax.drawImage(v, 0, 0, W, H);
+        if (i % stripEvery === 0 && strip.length < 8) { sx.drawImage(v, 0, 0, sc.width, sc.height); strip.push(sc.toDataURL('image/jpeg', 0.6)); }
+        const d = ax.getImageData(0, 0, W, H).data;
+        const cur = new Float32Array(W * H);
+        let diff = 0, lum = 0;
+        for (let k = 0, p = 0; k < cur.length; k++, p += 4) {
+          cur[k] = (d[p] * 3 + d[p + 1] * 6 + d[p + 2]) / 10;
+          lum += cur[k];
+          if (prev) diff += Math.abs(cur[k] - prev[k]);
+        }
+        const dark = lum / cur.length < 25 ? 0.3 : 1; // 真っ暗な場面は避ける
+        scores.push(prev ? (diff / cur.length) * dark : 0);
+        prev = cur;
+        onProgress((i + 1) / N);
       }
-      const dark = lum / cur.length < 25 ? 0.3 : 1; // 真っ暗な場面は避ける
-      scores.push(prev ? (diff / cur.length) * dark : 0);
-      prev = cur;
-      onProgress(Math.min(t / c.duration, 1));
+      if (misses > N / 2) {
+        // 読み取りに失敗した時は「真ん中寄り」を良しとする
+        c.scores = scores.map((_, i) => 1 - Math.abs(i / N - 0.5));
+      } else {
+        const sorted = [...scores].sort((a, b) => a - b);
+        const cap = sorted[Math.floor(sorted.length * 0.9)] || 1;
+        c.scores = scores.map((s, i) => {
+          const t = i * step;
+          const edge = (t < 0.7 || t > c.duration - 0.7) ? 0.5 : 1; // 撮り始め・撮り終わりは弱める
+          return Math.min(s, cap) * edge + 0.01;
+        });
+      }
+      c.step = step;
+      c.strip = strip.length ? strip : null;
+    } finally {
+      freeVideo(v);
+      c.analyzing = null;
     }
-    // 手ブレのような極端な動きに引っ張られないよう上限をかける。撮り始め・撮り終わりは弱める
-    const sorted = [...scores].sort((a, b) => a - b);
-    const cap = sorted[Math.floor(sorted.length * 0.9)] || 1;
-    c.scores = scores.map((sc, i) => {
-      const t = i * step;
-      const edge = (t < 0.7 || t > c.duration - 0.7) ? 0.5 : 1;
-      return Math.min(sc, cap) * edge + 0.01;
+  })();
+  return c.analyzing;
+}
+
+// 1本の素材から、合計 share 秒ぶんの見どころを（重ならないよう）k か所切り出す
+function pickWindows(c, share, pace) {
+  share = Math.min(share, c.duration);
+  const cut = { slow: 6, normal: 3.5, fast: 2 }[pace] || 3.5;
+  let k = Math.max(1, Math.round(share / cut));
+  const n = c.scores.length;
+  const res = [];
+  while (k >= 1) {
+    const L = share / k;
+    const w = Math.max(1, Math.round(L / c.step));
+    const sums = [];
+    for (let i = 0; i + w <= n; i++) { let s = 0; for (let j = i; j < i + w; j++) s += c.scores[j]; sums.push(s); }
+    const chosen = [];
+    for (let j = 0; j < k; j++) {
+      let best = -1;
+      sums.forEach((s, i) => {
+        if (chosen.some(ch => Math.abs(ch - i) < w + 1)) return;
+        if (best < 0 || s > sums[best]) best = i;
+      });
+      if (best < 0) break;
+      chosen.push(best);
+    }
+    if (chosen.length === k || k === 1) {
+      chosen.sort((a, b) => a - b);
+      for (const i of chosen) { const a = clamp(i * c.step, 0, c.duration - L); res.push([a, a + L]); }
+      return res;
+    }
+    k--;
+  }
+  return [[0, share]];
+}
+
+// 合計がぴったり目標の長さになるよう、各カットの終わりを伸び縮みさせる
+function fitExact(target) {
+  for (let pass = 0; pass < 6; pass++) {
+    const diff = target - timeline().total;
+    if (Math.abs(diff) < 0.05) return true;
+    const room = segs.map(g => diff > 0 ? (g.duration - g.out) / g.speed : (g.out - g.in - 0.8) / g.speed).map(r => Math.max(0, r));
+    const R = room.reduce((a, b) => a + b, 0);
+    if (R < 0.01) return false;
+    segs.forEach((g, i) => {
+      const d = clamp(diff * room[i] / R, -room[i], room[i]);
+      g.out = clamp(g.out + d * g.speed, g.in + 0.3, g.duration);
     });
-    c.step = step;
-  } finally {
-    v.remove();
   }
+  return Math.abs(target - timeline().total) < 0.1;
 }
 
-function pickWindow(c, len) {
-  if (len >= c.duration - 0.1) { c.in = 0; c.out = c.duration; return; }
-  const n = Math.max(1, Math.round(len / c.step));
-  let best = 0, bestAt = 0, sum = 0;
-  for (let i = 0; i < c.scores.length; i++) {
-    sum += c.scores[i];
-    if (i >= n) sum -= c.scores[i - n];
-    if (i >= n - 1 && sum > best) { best = sum; bestAt = i - n + 1; }
-  }
-  c.in = clamp(bestAt * c.step, 0, c.duration - len);
-  c.out = c.in + len;
-}
-
-$('autoBtn').onclick = async () => {
-  const used = clips.filter(c => c.include);
-  if (!used.length) return;
+async function autoEdit() {
+  const target = targetLen();
+  const src = clips.filter(c => c.include);
+  if (!src.length || !target) return;
   $('autoBtn').disabled = true;
   try {
-    const s = settings();
-    const target = +$('target').value + (OVERLAP.has(s.trans) ? (used.length - 1) * s.td : 0);
-    const totalDur = used.reduce((a, c) => a + c.duration, 0);
-    for (const [i, c] of used.entries()) {
-      await analyze(c, (p) => setStatus(`見どころを探しています ${i + 1} / ${used.length}（${Math.round(p * 100)}%）`));
-      pickWindow(c, clamp(target * c.duration / totalDur, Math.min(2, c.duration), c.duration));
+    for (const [i, c] of src.entries()) {
+      await analyze(c, (p) => setStatus(`見どころを探しています ${i + 1} / ${src.length}（${Math.round(p * 100)}%）`));
     }
-    syncTrim();
-    renderList();
+    const pace = $('pace').value;
+    const w = src.map(c => Math.sqrt(c.duration));
+    const W = w.reduce((a, b) => a + b, 0);
+    let budget = target;
+    for (let pass = 0; pass < 4; pass++) {
+      segs = [];
+      src.forEach((c, i) => {
+        const share = clamp(budget * w[i] / W, Math.min(1.2, c.duration), c.duration);
+        for (const [a, b] of pickWindows(c, share, pace)) segs.push(makeSeg(c, a, b));
+      });
+      const total = timeline().total;
+      if (Math.abs(total - target) < 0.3) break;
+      budget += target - total;
+      if (budget <= 1) break;
+    }
+    const ok = fitExact(target);
+    tlManual = false;
+    selectSeg(segs[0] || null);
+    renderLibrary();
     refresh();
+    setStatus(ok ? `${fmtT(target)} に自動編集しました（${segs.length}カット）` : `素材が足りないため ${fmtT(timeline().total)} になりました（${segs.length}カット）`);
   } finally {
-    $('autoBtn').disabled = false;
+    $('autoBtn').disabled = !clips.length;
   }
-};
+}
 
-$('resetBtn').onclick = () => {
-  clips.forEach(c => { c.in = 0; c.out = c.duration; });
-  syncTrim();
-  renderList();
+$('autoBtn').onclick = () => {
+  if (!targetLen()) { alert('「仕上がりの長さ」をえらんでください'); return; }
+  autoEdit();
+};
+$('fitBtn').onclick = () => {
+  const t = targetLen();
+  if (!t) return;
+  if (!fitExact(t)) alert(`素材の長さが足りないため、${fmtT(timeline().total)} までしか合わせられませんでした`);
+  renderTimeline();
   refresh();
 };
+$('target').addEventListener('change', () => { updateLengthInfo(); if (targetLen() && clips.length) autoEdit(); });
+$('pace').addEventListener('change', () => { if (targetLen() && clips.length) autoEdit(); });
 
 // ---------- テンプレート一覧 ----------
 let demoCache = {};
@@ -1485,16 +1766,16 @@ function demoSource(portrait) {
 }
 
 function sampleClip() {
-  const c = selClip() || clips.find(k => k.include);
+  const g = selSeg || segs[0];
   return {
-    src: c ? c.frame : demoSource(settings().h > settings().w),
-    clip: { caption: (c && c.caption) || 'テロップ', date: c ? c.date : new Date(), showDate: true },
+    src: g ? g.src.frame : demoSource(settings().h > settings().w),
+    clip: { caption: (g && g.caption) || 'テロップ', date: g ? g.date : new Date(), showDate: true },
   };
 }
 
 function renderGallery() {
-  const g = $('gallery');
-  if (!g.children.length) {
+  const gal = $('gallery');
+  if (!gal.children.length) {
     for (const [id, t] of Object.entries(TPL)) {
       const b = document.createElement('button');
       b.className = 'tpl';
@@ -1503,14 +1784,15 @@ function renderGallery() {
       b.onclick = () => {
         tplId = id;
         try { localStorage.setItem('clip.tpl', id); } catch {}
-        g.querySelectorAll('.tpl').forEach(el => el.classList.toggle('sel', el.dataset.id === id));
+        gal.querySelectorAll('.tpl').forEach(el => el.classList.toggle('sel', el.dataset.id === id));
+        keepTarget();
         refresh();
       };
-      g.appendChild(b);
+      gal.appendChild(b);
     }
   }
   const smp = sampleClip();
-  g.querySelectorAll('.tpl').forEach(b => {
+  gal.querySelectorAll('.tpl').forEach(b => {
     const id = b.dataset.id;
     b.classList.toggle('sel', id === tplId);
     const s = settings(id);
@@ -1519,7 +1801,7 @@ function renderGallery() {
     const R = makeR(b.querySelector('canvas'), small);
     const t = TPL[id];
     const g0 = { kind: 'clip', clip: smp.clip, idx: 0, i: 0, len: 5, overlap: 0, nextOverlap: 0, last: true };
-    if (t.cards && !t.layout && (id === 'trailer' || id === 'silent')) {
+    if (t.cards && (id === 'trailer' || id === 'silent')) {
       // 文字カードのあるテンプレートは、映像と文字カードの両方の雰囲気がわかるよう左右で見せる
       renderFrame(R, [{ g: g0, src: smp.src, local: 1.2 }], 1.2, 0);
       const half = document.createElement('canvas');
@@ -1532,18 +1814,23 @@ function renderGallery() {
   });
 }
 
+// テンプレートや切り替えを変えると全体の長さが変わるので、おまかせ中なら目標に合わせ直す
+function keepTarget() {
+  if (!tlManual && targetLen() && segs.length) fitExact(targetLen());
+}
+
 // ---------- プレビュー（停止中） ----------
 function drawStill() {
   if (running) return;
   const s = settings();
   const R = makeR(cv, s);
-  const c = selClip();
-  const src = c && ev.readyState >= 2 ? ev : c ? c.frame : null;
-  if (c && src) {
-    const segs = timeline().segs;
-    const g = segs.find(x => x.kind === 'clip' && x.clip === c) || { kind: 'clip', clip: c, idx: 0, i: 0, len: 5, overlap: 0, nextOverlap: 0, last: true };
-    const g0 = { ...g, overlap: 0, nextOverlap: 0, i: 0, last: true };
-    const isFirst = segs[0] && segs[0].clip === c;
+  const g = selSeg;
+  const src = g && ev.readyState >= 2 ? ev : g ? g.src.frame : null;
+  if (g && src) {
+    const items = timeline().segs;
+    const it = items.find(x => x.kind === 'clip' && x.clip === g) || { kind: 'clip', clip: g, idx: 0, i: 0, len: 5 };
+    const g0 = { ...it, overlap: 0, nextOverlap: 0, i: 0, last: true };
+    const isFirst = items[0] && items[0].clip === g;
     renderFrame(R, [{ g: g0, src, local: 1.2 }], isFirst ? 1.5 : 10, 0);
   } else {
     R.ctx.fillStyle = '#000';
@@ -1554,16 +1841,21 @@ function drawStill() {
 }
 
 function refresh() {
-  const { segs, total } = timeline();
+  const { segs: items, total } = timeline();
   const any = clips.length > 0;
-  $('sortBtn').disabled = $('autoBtn').disabled = $('resetBtn').disabled = !any || !!running;
-  $('play').disabled = $('rec').disabled = !segs.length || !!running;
-  if (!running) setStatus(segs.length ? `${TPL[tplId].name} ・ ${clips.filter(c => c.include).length}クリップ ・ ${fmtT(total)}　▶ でつないだムービーを再生` : '動画を追加してください');
+  $('sortBtn').disabled = !any;
+  $('autoBtn').disabled = !any;
+  $('play').disabled = !items.length || (running && !running.paused);
+  $('rec').disabled = !items.length || !!running;
+  if (!running) setStatus(items.length ? `${TPL[tplId].name} ・ ${segs.length}カット ・ ${fmtT(total)}　▶ でつないだムービーを再生` : '動画を追加してください');
+  updateLengthInfo();
+  if (!document.querySelector('[data-tab="edit"]').hidden) renderTimeline();
   drawStill();
   if (!document.querySelector('[data-tab="tpl"]').hidden) renderGallery();
 }
 
-['trans', 'td', 'aspect', 'height', 'fit', 'dfmt', 'dpos'].forEach(id => $(id).addEventListener('change', refresh));
+['trans', 'td'].forEach(id => $(id).addEventListener('change', () => { keepTarget(); refresh(); }));
+['aspect', 'height', 'fit', 'dfmt', 'dpos'].forEach(id => $(id).addEventListener('change', refresh));
 $('title').addEventListener('input', () => drawStill());
 $('title').addEventListener('change', refresh);
 
@@ -1612,6 +1904,7 @@ async function prepare(p, g) {
   if (p.v.readyState < 1) await once(p.v, 'loadedmetadata').catch(() => {});
   await seekTo(p.v, g.clip.in);
   try { p.a.currentTime = g.clip.in; } catch {}
+  p.v.playbackRate = p.a.playbackRate = g.clip.speed || 1;
   if (p.token === token) p.ready = true;
 }
 
@@ -1675,7 +1968,8 @@ function run({ record }) {
   let wakeLock = null;
   if (navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { wakeLock = l; }).catch(() => {});
 
-  running = { raf: 0, stop: null, record };
+  running = { raf: 0, stop: null, record, paused: false, resume: null };
+  document.querySelector('nav.tabbar button[data-go="out"]').classList.toggle('busy', record);
   $('result').innerHTML = '';
   refresh();
   $('stop').disabled = false;
@@ -1703,7 +1997,7 @@ function run({ record }) {
     bgmGain.gain.linearRampToValueAtTime(0, now + total);
     if (bgmUrls.length) bgmEl.play().catch(() => {});
     if (recorder) recorder.start(1000);
-    const t0 = performance.now();
+    let t0 = performance.now();
     const R = makeR(cv, s);
 
     let stopped = false;
@@ -1712,6 +2006,9 @@ function run({ record }) {
       stopped = true;
       cancelAnimationFrame(running.raf);
       document.removeEventListener('visibilitychange', onHide);
+      document.querySelector('nav.tabbar button[data-go="out"]').classList.remove('busy');
+      $('play').textContent = '▶ プレビュー';
+      if (audioCtx.state === 'suspended') audioCtx.resume();
       players.forEach(release);
       bgmEl.pause();
       bgmEl.onended = null;
@@ -1719,11 +2016,6 @@ function run({ record }) {
       if (wakeLock) wakeLock.release().catch(() => {});
       const done = () => { running = null; $('stop').disabled = true; refresh(); };
       if (!recorder) { done(); setStatus('プレビュー終了'); return; }
-      if (reason === 'hidden') {
-        recorder.onstop = () => { done(); setStatus('画面が切り替わったため、書き出しを中止しました。もう一度お試しください'); };
-        recorder.stop();
-        return;
-      }
       recorder.onstop = () => {
         const ext = mime.startsWith('video/mp4') ? 'mp4' : 'webm';
         const blob = new Blob(chunks, { type: mime.split(';')[0] });
@@ -1756,9 +2048,42 @@ function run({ record }) {
       };
       recorder.stop();
     };
-    const onHide = () => { if (document.hidden && recorder) finish('hidden'); };
+    // ほかのアプリに切り替えたら一時停止し、戻ってきたら「▶ 続きから」で再開する
+    let pausedAt = null;
+    const pauseAll = () => {
+      if (pausedAt !== null || stopped) return;
+      pausedAt = performance.now();
+      cancelAnimationFrame(running.raf);
+      players.forEach(p => { p.v.pause(); p.a.pause(); });
+      bgmEl.pause();
+      audioCtx.suspend();
+      if (recorder && recorder.state === 'recording') recorder.pause();
+      running.paused = true;
+      $('play').textContent = '▶ 続きから';
+      $('play').disabled = false;
+      setStatus(`一時停止中（${fmtT(Math.min((pausedAt - t0) / 1000, total))} / ${fmtT(total)}）「▶ 続きから」で再開します`);
+    };
+    const resumeAll = () => {
+      if (pausedAt === null || stopped) return;
+      t0 += performance.now() - pausedAt;
+      pausedAt = null;
+      audioCtx.resume();
+      for (const g of segs) {
+        if (g.kind !== 'clip' || !g.started || g.done || !g.player) continue;
+        g.player.v.play().catch(() => {});
+        if (!g.clip.mute && s.origVol > 0) g.player.a.play().catch(() => {});
+      }
+      if (bgmUrls.length) bgmEl.play().catch(() => {});
+      if (recorder && recorder.state === 'paused') recorder.resume();
+      running.paused = false;
+      $('play').textContent = '▶ プレビュー';
+      $('play').disabled = true;
+      running.raf = requestAnimationFrame(tick);
+    };
+    const onHide = () => { if (document.hidden) pauseAll(); };
     document.addEventListener('visibilitychange', onHide);
     running.stop = finish;
+    running.resume = resumeAll;
 
     const tick = () => {
       const t = (performance.now() - t0) / 1000;
@@ -1825,7 +2150,10 @@ function run({ record }) {
   });
 }
 
-$('play').onclick = () => run({ record: false });
+$('play').onclick = () => {
+  if (running && running.paused && running.resume) running.resume();
+  else run({ record: false });
+};
 $('rec').onclick = () => { window.scrollTo(0, 0); run({ record: true }); };
 $('stop').onclick = () => {
   if (!running) return;
@@ -1834,7 +2162,8 @@ $('stop').onclick = () => {
 };
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
-select(null);
+selectSeg(null);
+renderLibrary();
 refresh();
 </script>
 </body>
