@@ -11,6 +11,20 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon-192.png">
 <title>Tsumugi</title>
+<meta name="description" content="iPhoneの動画をえらぶだけで、1本のムービーに。撮影順の自動編集・BGMの拍に合わせたカット・最大4K保存。インストール不要、ブラウザだけで動きます。">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Tsumugi">
+<meta property="og:title" content="Tsumugi（つむぎ）｜思い出の動画を、1本のムービーに">
+<meta property="og:description" content="動画をえらんで、長さとテンプレを決めるだけ。自動編集・BGM・字幕・最大4K保存。ブラウザだけで動き、動画は端末の外に出ません。">
+<meta property="og:url" content="https://kouf0911-eng.github.io/crip-no-kouro/">
+<meta property="og:image" content="https://kouf0911-eng.github.io/crip-no-kouro/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="ja_JP">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Tsumugi（つむぎ）｜思い出の動画を、1本のムービーに">
+<meta name="twitter:description" content="動画をえらぶだけで自動編集。BGM・字幕・最大4K保存。ブラウザだけで動きます。">
+<meta name="twitter:image" content="https://kouf0911-eng.github.io/crip-no-kouro/og.png">
 <style>
   /* 雨の夜、車窓の向こうの街あかり。フィルムで撮ったような暗く暖かいトーン */
   :root {
@@ -234,7 +248,7 @@
       <div class="hero">
         <h1 class="brand">Tsumugi<span>つむぎ</span></h1>
         <p>思い出の動画を、1本のムービーにつむぐ。<br>動画をえらんで、長さとテンプレを決めるだけです。</p>
-        <p class="ver">ver 18 ・ night　<button class="linkbtn" id="resetAll" hidden>最初からやり直す</button></p>
+        <p class="ver">ver 19 ・ night　<button class="linkbtn" id="shareApp">🔗 アプリを共有</button><button class="linkbtn" id="resetAll" hidden>最初からやり直す</button></p>
       </div>
       <div class="panel step">
         <h2><b>1</b>動画をえらぶ <span id="eCount" class="count"></span></h2>
@@ -268,7 +282,7 @@
         <p class="hint" id="qualNote" hidden></p>
         <p class="label">編集のしかた</p>
         <div class="chips small" id="eOpts">
-          <button data-k="order">🕒 撮影した順に並べる</button><button data-k="chapters">📅 日付の見出し</button>
+          <button data-k="order">🕒 撮影した順に並べる</button><button data-k="chapters">📅 日付の見出し</button><button data-k="ending">🎬 エンディング</button><button data-k="colorMatch">🎨 色と明るさをそろえる</button>
         </div>
         <p class="label">タイトル・BGM（なくてもOK）</p>
         <input id="eTitle" type="text" placeholder="タイトル（例：夏の京都）">
@@ -436,6 +450,16 @@
           <select id="chapters">
             <option value="on">入れる（複数の日にまたがる時）</option>
             <option value="off">入れない</option>
+          </select></div>
+        <div class="row"><label for="ending">エンディング</label>
+          <select id="ending">
+            <option value="on">入れる（タイトルと撮影期間）</option>
+            <option value="off">入れない</option>
+          </select></div>
+        <div class="row"><label for="colorMatch">色と明るさ</label>
+          <select id="colorMatch">
+            <option value="on">素材ごとの差をそろえる</option>
+            <option value="off">そのまま</option>
           </select></div>
         <div class="row"><label for="td">切り替えの速さ</label>
           <select id="td">
@@ -1286,7 +1310,7 @@ const TPL = {
 
   variety: tpl({
     name: 'バラエティ番組', desc: '太い縁取りのテロップがポンッと出るTV風',
-    trans: 'zoom', td: 0.35, font: 'round', textAnim: 'pop', transMode: 'every',
+    trans: 'zoom', td: 0.35, font: 'round', textAnim: 'pop', transMode: 'every', beatPulse: true,
     grade(R) { saturate(R, 0.15); contrast(R, 0.25); },
     caption(R, c, a, l) {
       if (!c.caption.trim()) return;
@@ -1321,7 +1345,7 @@ const TPL = {
 
   neon: tpl({
     name: 'ネオン・グリッチ', desc: 'RGBずれとノイズ、光る文字。パーティー・夜の街に',
-    trans: 'glitch', td: 0.35, font: 'sans', textAnim: 'type', transMode: 'every',
+    trans: 'glitch', td: 0.35, font: 'sans', textAnim: 'type', transMode: 'every', beatPulse: true,
     grade(R) {
       contrast(R, 0.5);
       tint(R, 'soft-light', '#ff2bd6', 0.18);
@@ -1344,7 +1368,7 @@ const TPL = {
 
   party: tpl({
     name: 'お祝い（紙吹雪）', desc: '紙吹雪が舞う明るい仕上がり。誕生日やイベントに',
-    trans: 'zoom', td: 0.45, font: 'round', textAnim: 'pop',
+    trans: 'zoom', td: 0.45, font: 'round', textAnim: 'pop', beatPulse: true,
     grade(R) { saturate(R, 0.12); tint(R, 'soft-light', '#ffd27a', 0.15); bloom(R, 0.08); },
     hud(R, t) {
       const c = R.ctx;
@@ -1491,6 +1515,10 @@ function drawMedia(R, src, o) {
   c.save();
   c.globalAlpha = o.alpha;
   let sc = o.scale * (t.pulse ? 1 + 0.1 * Math.max(0, 1 - (o.local ?? 9) / 0.35) : 1);
+  if ((t.pulse || t.beatPulse) && R.beat && o.t != null) {
+    const ph = (((o.t - R.beat.offset) % R.beat.period) + R.beat.period) % R.beat.period / R.beat.period;
+    sc *= 1 + 0.03 * Math.exp(-ph * 9); // 拍の頭で小さく「ドン」と寄る
+  }
   let px = 0, py = 0;
   // プロの定番：止まった絵にも「ゆっくり寄る／引く」動きをつける（カットごとに向きを変える）
   if (t.drift !== false && o.len && o.local != null) {
@@ -1601,7 +1629,7 @@ function renderFrame(R, active, frameT, total) {
       c.restore();
       continue;
     }
-    const base = { ...tr, idx: a.g.idx, clip: a.g.clip, local: a.local, len: a.g.len };
+    const base = { ...tr, idx: a.g.idx, clip: a.g.clip, local: a.local, len: a.g.len, t: frameT };
     if (tr.speed > 0.05) {
       // 横に流れる切り替えは残像（モーションブラー）をつけて自然に
       const n = 4, spread = R.w * 0.05 * tr.speed;
@@ -1614,6 +1642,7 @@ function renderFrame(R, active, frameT, total) {
     if (a.g.transOut === 'blur' && a.ph.pout < 1) drawMedia(R, a.src, { ...base, blur: true, alpha: 1 - smooth(a.ph.pout) });
   }
 
+  colorMatch(R, active);
   t.grade(R, frameT);
   if (R.bar) { c.fillStyle = '#000'; c.fillRect(0, 0, R.w, R.bar); c.fillRect(0, R.h - R.bar, R.w, R.bar); }
 
@@ -1645,11 +1674,45 @@ function renderFrame(R, active, frameT, total) {
 
   t.hud(R, frameT, active);
   if (!t.noTitle) t.title(R, frameT);
+  if (total && s.ending && !t.cards) drawEnding(R, frameT, total);
 
   if (total) {
     const edge = clamp(Math.min(frameT / 0.5, (total - frameT) / 1.2), 0, 1);
     if (edge < 1) op(R, 'source-over', 1 - smooth(edge), () => fill(R, '#000'));
   }
+}
+
+// 色と明るさをそろえる：素材ごとの明るさ・色かぶりを、全体の平均に半分だけ寄せる
+function colorMatch(R, active) {
+  if (!R.s.colorMatch) return;
+  const avgs = clips.filter(c => c.avg).map(c => c.avg);
+  if (avgs.length < 2) return;
+  let top = null, topV = 0;
+  for (const a of active) if (a.g.kind === 'clip' && a.g.clip.src.avg && a.ph && a.ph.vis >= topV) { top = a; topV = a.ph.vis; }
+  if (!top) return;
+  const m = top.g.clip.src.avg, k = 0.5 * topV;
+  const L = avgs.reduce((x, a) => x + a.l, 0) / avgs.length;
+  if (m.l < L - 4) op(R, 'screen', clamp((L - m.l) / 255 * 1.6 * k, 0, 0.35), () => fill(R, '#fff'));
+  else if (m.l > L + 4) op(R, 'multiply', clamp((m.l - L) / 255 * 1.6 * k, 0, 0.35), () => fill(R, '#000'));
+  // 色かぶり：強すぎる色だけを少し抑える（掛け算で他の色は変えない）
+  const mean = (m.r + m.g + m.b) / 3, f = (x) => Math.round(255 * clamp(1 - (x / mean - 1) * 0.9, 0.82, 1));
+  if (Math.max(m.r, m.g, m.b) / mean > 1.04) op(R, 'multiply', k * 1.4, () => fill(R, `rgb(${f(m.r)},${f(m.g)},${f(m.b)})`));
+}
+
+// エンディング：最後の数秒にタイトルと撮影期間を入れて余韻をつくる
+function drawEnding(R, t, total) {
+  const dur = Math.min(3.2, total * 0.2), local = t - (total - dur);
+  if (local < 0) return;
+  const days = clips.filter(c => segs.some(g => g.src === c)).map(c => c.date).sort((a, b) => a - b);
+  if (!days.length) return;
+  const first = days[0], last = days[days.length - 1];
+  const range = fmtDate(first, 'dot') === fmtDate(last, 'dot') ? fmtDate(first, 'dot') : `${fmtDate(first, 'dot')} – ${fmtDate(last, 'dot')}`;
+  const a = clamp(local / 0.8, 0, 1);
+  op(R, 'source-over', 0.45 * a, () => fill(R, '#000'));
+  const u = R.u, font = R.tpl.font === 'mono' ? 'mono' : R.tpl.font === 'round' ? 'round' : 'serif';
+  txt(R, R.s.title || 'memories', R.w / 2, R.h / 2 - u * 0.03, u * 0.075, { font, alpha: a, spacing: u * 0.012, weight: 600 });
+  op(R, 'source-over', a * 0.9, (c) => { c.fillStyle = '#f0b46a'; c.fillRect(R.w / 2 - u * 0.08 * a, R.h / 2 + u * 0.035, u * 0.16 * a, Math.max(1, u * 0.004)); });
+  txt(R, range, R.w / 2, R.h / 2 + u * 0.09, u * 0.032, { font, alpha: a * 0.85, spacing: u * 0.01 });
 }
 
 // 日付が変わった最初のカットに入れる見出し（DAY 2・9月27日）
@@ -1686,6 +1749,8 @@ function settings(overrideTpl) {
     td: $('td').value === 'auto' ? t.td : Number($('td').value),
     transMode: $('transMode').value === 'auto' ? (t.transMode || 'scene') : $('transMode').value,
     chapters: $('chapters').value === 'on',
+    ending: $('ending').value === 'on',
+    colorMatch: $('colorMatch').value === 'on',
     fit: $('fit').value, title: $('title').value.trim(), dfmt: $('dfmt').value, dpos: $('dpos').value,
     bgmVol: +$('bgmVol').value, origVol: +$('origVol').value,
     bgmName: bgmFiles[0] ? bgmFiles[0].name.replace(/\.[^.]+$/, '') : '',
@@ -1775,9 +1840,9 @@ function saveProject() {
     if (restoring || !booted) return;
     const project = {
       v: 1, nextId, tplId, mode, lastEdit, view: document.body.classList.contains('result') ? 'result' : 'setup', tlManual, galleryCat,
-      settings: Object.fromEntries(['target', 'pace', 'aspect', 'height', 'fit', 'trans', 'td', 'transMode', 'order', 'chapters', 'title', 'dfmt', 'dpos', 'bgmVol', 'origVol'].map(id => [id, $(id).value])),
+      settings: Object.fromEntries(['target', 'pace', 'aspect', 'height', 'fit', 'trans', 'td', 'transMode', 'order', 'chapters', 'ending', 'colorMatch', 'title', 'dfmt', 'dpos', 'bgmVol', 'origVol'].map(id => [id, $(id).value])),
       clips: clips.map(c => ({ id: c.id, name: c.name, type: c.type, duration: c.duration, w: c.w, h: c.h, date: c.date.getTime(), dateSource: c.dateSource,
-        include: c.include, thumb: c.thumb, strip: c.strip, scores: c.scores, step: c.step })),
+        include: c.include, thumb: c.thumb, strip: c.strip, scores: c.scores, step: c.step, avg: c.avg })),
       segs: segs.map(g => ({ id: g.id, src: g.src.id, in: g.in, out: g.out, speed: g.speed, caption: g.caption, showDate: g.showDate, mute: g.mute })),
       bgm: bgmFiles.map(f => ({ name: f.name, type: f.type })),
     };
@@ -2206,7 +2271,7 @@ async function analyze(c, onProgress) {
       sc.width = 96; sc.height = Math.round(96 * (c.h || 9) / (c.w || 16));
       const sx = sc.getContext('2d');
       const strip = [], stripEvery = Math.max(1, Math.floor(N / 8));
-      let prev = null, misses = 0;
+      let prev = null, misses = 0, sr = 0, sg = 0, sb = 0, sl = 0, cnt = 0;
       const scores = [];
       for (let i = 0; i < N; i++) {
         const t = Math.min(c.duration - 0.05, (i + 0.5) * step);
@@ -2219,6 +2284,7 @@ async function analyze(c, onProgress) {
         for (let k = 0, p = 0; k < cur.length; k++, p += 4) {
           cur[k] = (d[p] * 3 + d[p + 1] * 6 + d[p + 2]) / 10;
           lum += cur[k];
+          sr += d[p]; sg += d[p + 1]; sb += d[p + 2]; cnt++;
           if (prev) diff += Math.abs(cur[k] - prev[k]);
         }
         const dark = lum / cur.length < 25 ? 0.3 : 1; // 真っ暗な場面は避ける
@@ -2232,14 +2298,17 @@ async function analyze(c, onProgress) {
       } else {
         const sorted = [...scores].sort((a, b) => a - b);
         const cap = sorted[Math.floor(sorted.length * 0.9)] || 1;
+        const med = sorted[Math.floor(sorted.length * 0.5)] || 1;
         c.scores = scores.map((s, i) => {
           const t = i * step;
           const edge = (t < 0.7 || t > c.duration - 0.7) ? 0.5 : 1; // 撮り始め・撮り終わりは弱める
-          return Math.min(s, cap) * edge + 0.01;
+          const shaky = s > cap && s > med * 3 ? 0.55 : 1;              // 画面全体が大きく揺れる所（手ブレ・振り回し）は避ける
+          return Math.min(s, cap) * edge * shaky + 0.01;
         });
       }
       c.step = step;
       c.strip = strip.length ? strip : null;
+      if (cnt) c.avg = { r: sr / cnt, g: sg / cnt, b: sb / cnt, l: (sr * 0.3 + sg * 0.6 + sb * 0.1) / cnt };
     } finally {
       freeVideo(v);
       c.analyzing = null;
@@ -2333,6 +2402,44 @@ function shapeArc() {
     const w = calmWindow(g.src, g.out - g.in);
     if (w) [g.in, g.out] = w;
   }
+}
+
+// カット・オン・アクション：動きの途中で切り替えると、つなぎ目が自然に見える（切れ目を動きのピークへ寄せる）
+function cutOnAction() {
+  for (const g of segs) {
+    const c = g.src;
+    if (!c.scores || segs.filter(x => x.src === c).length > 2) continue;
+    const L = g.out - g.in;
+    let best = g.in, bestV = -1;
+    for (let d = -0.6; d <= 0.6001; d += c.step / 2) {
+      const a = g.in + d, b = a + L;
+      if (a < 0 || b > c.duration) continue;
+      const k = Math.min(c.scores.length - 1, Math.max(0, Math.round(b / c.step - 0.5)));
+      const v = c.scores[k] - Math.abs(d) * 0.02;
+      if (v > bestV) { bestV = v; best = a; }
+    }
+    g.in = best; g.out = best + L;
+  }
+}
+
+// スローモーションの見せ場：盛り上がり区間でいちばん動きのあるカットを0.5倍速に（長さは変えない）
+function slowMoHighlight(pace) {
+  const n = segs.length;
+  if (n < 5 || pace === 'fast') return false;
+  let best = null, bestV = -1;
+  segs.forEach((g, i) => {
+    const pos = i / (n - 1);
+    if (pos < 0.5 || pos > 0.9 || !g.src.scores) return;
+    const a = Math.floor(g.in / g.src.step), b = Math.ceil(g.out / g.src.step);
+    const sc = g.src.scores.slice(a, b);
+    const v = sc.reduce((x, y) => x + y, 0) / Math.max(1, sc.length);
+    if (v > bestV) { bestV = v; best = g; }
+  });
+  if (!best) return false;
+  const L = best.out - best.in, mid = best.in + L / 2;
+  best.in = Math.max(0, mid - L / 4); best.out = best.in + L / 2;
+  best.speed = 0.5;
+  return true;
 }
 
 // BGMのテンポ（BPM）と拍の位置を解析する
@@ -2461,9 +2568,11 @@ async function autoEdit() {
       if (budget <= 1) break;
     }
     shapeArc();
+    cutOnAction();
+    const slow = slowMoHighlight(pace);
     let ok = fitExact(target);
     if (beat) { snapToBeats(beat, target); ok = Math.abs(timeline().total - target) < 0.3; }
-    lastEdit = { beat, chrono: $('order').value === 'chrono', arc: segs.length >= 4 };
+    lastEdit = { beat, chrono: $('order').value === 'chrono', arc: segs.length >= 4, action: true, slow, shake: true };
     tlManual = false;
     selectSeg(segs[0] || null);
     renderLibrary();
@@ -2613,7 +2722,7 @@ function refresh() {
   if (mode === 'easy') renderEasy();
 }
 
-['trans', 'td', 'transMode', 'chapters'].forEach(id => $(id).addEventListener('change', () => { keepTarget(); refresh(); }));
+['trans', 'td', 'transMode', 'chapters', 'ending', 'colorMatch'].forEach(id => $(id).addEventListener('change', () => { keepTarget(); refresh(); }));
 ['aspect', 'height', 'fit', 'dfmt', 'dpos'].forEach(id => $(id).addEventListener('change', refresh));
 $('title').addEventListener('input', () => drawStill());
 $('title').addEventListener('change', refresh);
@@ -2661,6 +2770,8 @@ function renderEasy() {
   markChips('eCat', galleryCat);
   document.querySelector('#eOpts [data-k="order"]').classList.toggle('on', $('order').value === 'chrono');
   document.querySelector('#eOpts [data-k="chapters"]').classList.toggle('on', $('chapters').value === 'on');
+  document.querySelector('#eOpts [data-k="ending"]').classList.toggle('on', $('ending').value === 'on');
+  document.querySelector('#eOpts [data-k="colorMatch"]').classList.toggle('on', $('colorMatch').value === 'on');
   const th = $('eThumbs');
   if (th.dataset.n !== clips.map(c => c.id).join()) {
     th.dataset.n = clips.map(c => c.id).join();
@@ -2698,6 +2809,13 @@ function renderEasy() {
   if (lastEdit && lastEdit.chrono) tags.push('撮影した順');
   if (lastEdit && lastEdit.arc) tags.push('起承転結のカット配分');
   if (lastEdit && lastEdit.beat) tags.push(`BGMの拍に合わせたカット（${Math.round(lastEdit.beat.bpm)} BPM）`);
+  if (lastEdit && lastEdit.action) tags.push('動きの途中で切り替え（カット・オン・アクション）');
+  if (lastEdit && lastEdit.shake) tags.push('手ブレの強い場面を避ける');
+  if (lastEdit && lastEdit.slow) tags.push('見せ場をスローモーションに');
+  if ($('colorMatch').value === 'on') tags.push('色と明るさをそろえる');
+  if ($('ending').value === 'on' && !TPL[tplId].cards) tags.push('エンディング（タイトルと撮影期間）');
+  if (lastEdit && lastEdit.beat && (TPL[tplId].pulse || TPL[tplId].beatPulse)) tags.push('拍に合わせたズーム');
+  if (offlineCaps) tags.push('次の場面の音を少し先に（J-カット）');
   const st = settings();
   tags.push(st.transMode === 'every' ? '毎カットに切り替え効果' : '場面の変わり目だけ切り替え効果');
   if (TPL[tplId].drift !== false) tags.push('ゆっくりズーム');
@@ -2749,9 +2867,18 @@ $('eBgm').onclick = () => $('bgm').click();
 document.querySelectorAll('#eOpts button').forEach(b => b.onclick = () => {
   const k = b.dataset.k;
   $(k).value = k === 'order' ? ($(k).value === 'chrono' ? 'manual' : 'chrono') : ($(k).value === 'on' ? 'off' : 'on');
+  if (running && !running.record) { stopPreview(); run({ record: false }); }
   refresh();
 });
 $('resetAll').onclick = $('resetAll2').onclick = resetProject;
+// アプリのリンクを人に送る（iPhoneは共有シート、使えない時はリンクをコピー）
+const APP_URL = 'https://kouf0911-eng.github.io/crip-no-kouro/';
+$('shareApp').onclick = async () => {
+  const data = { title: 'Tsumugi', text: '思い出の動画を、1本のムービーにつむぐアプリ', url: APP_URL };
+  if (navigator.share) { try { await navigator.share(data); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+  try { await navigator.clipboard.writeText(APP_URL); setStatus('アプリのリンクをコピーしました：' + APP_URL); const b = $('shareApp'); b.textContent = '✓ リンクをコピーしました'; setTimeout(() => { b.textContent = '🔗 アプリを共有'; }, 2500); }
+  catch (e) { prompt('このリンクをコピーして送ってください', APP_URL); }
+};
 
 $('eStart').onclick = async () => {
   if (!clips.length) return;
@@ -2846,6 +2973,7 @@ function release(p) {
   if (p.seg) p.seg.player = null;
   p.seg = null;
   p.ready = false;
+  p.want = null; p.hold = false;
 }
 
 $('bgm').onchange = (e) => {
@@ -2897,6 +3025,7 @@ function pickMime() {
 // 画面で再生しながら録画する方式は、iPhoneが重いとコマが飛んでカクつく。
 // こちらは裏でゆっくり再生しながら1コマずつ時刻を付けて圧縮するので、素材どおりの動きになる。
 const OUT_FPS = 30;
+const tickWait = (px) => px >= 2160 ? 12 : 0; // 4Kは合間に少し休んで、画面が固まらないようにする
 
 function loadScript(src) {
   return new Promise((res, rej) => {
@@ -2937,7 +3066,7 @@ async function pickVideoConfig(w, h, bitrate) {
 }
 
 // 各カットの音の出入り（切り替えに合わせたフェード）
-function audioEnvelope(param, g, s, vol) {
+function audioEnvelope(param, g, s, vol, lead = 0) {
   const fade = (tr, ov, first) => {
     if (first) return 0.03;
     if (tr === 'cut' || tr === 'none' || !tr) return 0.06;
@@ -2945,8 +3074,8 @@ function audioEnvelope(param, g, s, vol) {
     if (DIP.has(tr)) return Math.min(s.td / 2, g.len / 3);
     return 0.06;
   };
-  const st = g.start, en = g.start + g.len;
-  const fi = Math.min(fade(g.transIn, g.overlap, g.i === 0), g.len / 2);
+  const st = g.start - lead, en = g.start + g.len;
+  const fi = Math.min(fade(g.transIn, g.overlap, g.i === 0) + lead, g.len / 2 + lead);
   const fo = Math.min(g.last ? 1.2 : fade(g.transOut, g.nextOverlap, false), g.len / 2);
   param.setValueAtTime(0, st);
   param.linearRampToValueAtTime(vol, st + fi);
@@ -2969,7 +3098,10 @@ async function renderAudio(items, total, s, onStep) {
     try { ab = await new OfflineAudioContext(2, sr, sr).decodeAudioData(await (await fetch(url)).arrayBuffer()); } catch {}
     if (!ab) continue;
     for (const g of gs) {
-      const a = Math.floor(g.clip.in * ab.sampleRate), b = Math.min(ab.length, Math.ceil(g.clip.out * ab.sampleRate));
+      // J-カット：場面が変わる所では、次の場面の音を最大0.5秒先に鳴らし始める
+      const lead = g.i > 0 && g.transIn !== 'cut' && g.transIn !== 'none' ? Math.min(0.5, g.clip.in / g.clip.speed, g.start) : 0;
+      g.lead = lead;
+      const a = Math.floor((g.clip.in - lead * g.clip.speed) * ab.sampleRate), b = Math.min(ab.length, Math.ceil(g.clip.out * ab.sampleRate));
       if (b <= a) continue;
       const cut = new AudioBuffer({ length: b - a, numberOfChannels: 2, sampleRate: ab.sampleRate });
       for (let ch = 0; ch < 2; ch++) cut.copyToChannel(ab.getChannelData(Math.min(ch, ab.numberOfChannels - 1)).subarray(a, b), ch);
@@ -2981,9 +3113,9 @@ async function renderAudio(items, total, s, onStep) {
       const src = oc.createBufferSource(), gn = oc.createGain();
       src.buffer = buf;
       src.playbackRate.value = g.clip.speed;
-      audioEnvelope(gn.gain, g, s, s.origVol);
+      audioEnvelope(gn.gain, g, s, s.origVol, g.lead || 0);
       src.connect(gn).connect(oc.destination);
-      src.start(g.start, 0, buf.duration);
+      src.start(g.start - (g.lead || 0), 0, buf.duration);
     }
   };
   onStep('音をミックスしています');
@@ -3091,8 +3223,20 @@ async function runOffline() {
     const picked = await pickVideoConfig(s.w, s.h, bitrate);
     if (!picked) throw new Error('この端末は動画の圧縮に対応していません');
     const vcfg = picked.cfg;
+    // 保存データは16MBずつ小分けで受け取る（1つの大きな配列だと4Kでメモリを使い切って固まる）
+    const parts = [];
+    let outEnd = 0;
+    const onData = (data, pos) => {
+      if (pos === outEnd) { parts.push({ pos, data: data.slice() }); outEnd += data.length; return; }
+      // 先頭側の書き換え（箱のサイズの書き戻しなど）は、該当する部分に上書きする
+      for (const part of parts) {
+        const a = Math.max(pos, part.pos), b = Math.min(pos + data.length, part.pos + part.data.length);
+        if (a < b) part.data.set(data.subarray(a - pos, b - pos), a - part.pos);
+      }
+      if (pos + data.length > outEnd) { const tail = data.subarray(outEnd - pos); parts.push({ pos: outEnd, data: tail.slice() }); outEnd += tail.length; }
+    };
     const muxer = new Mp4Muxer.Muxer({
-      target: new Mp4Muxer.ArrayBufferTarget(),
+      target: new Mp4Muxer.StreamTarget({ onData, chunked: true, chunkSize: 16 * 2 ** 20 }),
       video: { codec: picked.muxer, width: s.w, height: s.h, frameRate: OUT_FPS },
       audio: { codec: offlineCaps.audio.muxer, numberOfChannels: 2, sampleRate: 48000 },
       fastStart: false,
@@ -3105,12 +3249,18 @@ async function runOffline() {
     // 3) 映像：各コマの時刻ぴったりの絵が出てから描いて圧縮する（出るまで待つ＝コマ飛び・重複なし）
     const R = makeR(cv, s);
     R.nClips = clipSegs.length;
+    R.beat = lastEdit && lastEdit.beat;
     const N = Math.ceil(total * OUT_FPS);
     const hasRVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
     for (const p of players) {
       if (p.rvfc || !hasRVFC) continue;
       p.rvfc = true;
-      const cb = (now, meta) => { p.mt = meta.mediaTime; p.mtSrc = p.v.currentSrc; p.v.requestVideoFrameCallback(cb); };
+      const cb = (now, meta) => {
+        p.mt = meta.mediaTime; p.mtSrc = p.v.currentSrc;
+        // 次に必要なコマが出た瞬間に止める（重い4Kでも映像が先に走り過ぎない＝コマ飛び・重複を防ぐ）
+        if (p.want != null && p.mt >= p.want - 0.5 / 30 && !p.v.paused && running && running.offline) { p.v.pause(); p.hold = true; }
+        p.v.requestVideoFrameCallback(cb);
+      };
       p.v.requestVideoFrameCallback(cb);
     }
     // 画面に出ているコマの時刻（前の素材の遅れて届いた報告は使わない）
@@ -3123,6 +3273,7 @@ async function runOffline() {
       if (document.hidden) { paused = true; players.forEach(p => { p.v.pause(); p.hold = false; }); setStatus('一時停止中：アプリに戻ると自動で続きから再開します'); }
       else if (paused && tickRef) {
         paused = false;
+        lastProgress = performance.now();
         for (const g of items) if (g.player && g.started && !g.done) g.player.v.play().catch(() => {});
         running.raf = requestAnimationFrame(tickRef);
       }
@@ -3146,7 +3297,9 @@ async function runOffline() {
           if (local >= -0.02 && p.ready && !g.started) { g.started = true; p.v.playbackRate = g.clip.speed * rate; p.v.play().catch(() => {}); }
         }
         let made = 0, waiting = false, ahead = false;
-        while (n < N && venc.encodeQueueSize < 6 && made < 4) {
+        const maxMade = px >= 2160 ? 1 : px >= 1440 ? 2 : 4, maxQueue = px >= 2160 ? 2 : px >= 1440 ? 4 : 6;
+        if (performance.now() - lastProgress > 20000) return reject(new Error('stall'));
+        while (n < N && venc.encodeQueueSize < maxQueue && made < maxMade) {
           const t = n / OUT_FPS;
           const active = [];
           for (const g of items) {
@@ -3179,7 +3332,8 @@ async function runOffline() {
           if (!p || !g.started || g.done || g.kind !== 'clip') continue;
           const local = n / OUT_FPS - g.start;
           if (local < 0 || local >= g.len) continue;
-          const lead = frameOf(p) - (g.clip.in + local * g.clip.speed);
+          p.want = g.clip.in + local * g.clip.speed;
+          const lead = frameOf(p) - p.want;
           if (lead > 1.5 / 30 && !p.v.paused) { p.v.pause(); p.hold = true; }
           else if (p.hold && lead <= 0.5 / 30) { p.hold = false; p.v.play().catch(() => {}); }
         }
@@ -3191,7 +3345,8 @@ async function runOffline() {
         $('prog').value = pr;
         setStatus(`なめらか書き出し中 ${Math.round(pr * 100)}%（${fmtT(n / OUT_FPS)} / ${fmtT(total)}）${pr > 0.05 ? `・残り約${Math.ceil(el / pr * (1 - pr))}秒` : ''}`);
         if (n >= N) return resolve();
-        running.raf = requestAnimationFrame(tick);
+        if (tickWait(px)) setTimeout(() => { running.raf = requestAnimationFrame(tick); }, tickWait(px));
+        else running.raf = requestAnimationFrame(tick);
       }
       tickRef = tick;
       running.raf = requestAnimationFrame(tick);
@@ -3204,7 +3359,8 @@ async function runOffline() {
     setStatus('音声を書き込んでいます…');
     if (audioBuf) await encodeAudio(audioBuf, muxer, () => {});
     muxer.finalize();
-    const blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
+    const blob = new Blob(parts.map(p => p.data), { type: 'video/mp4' });
+    parts.length = 0;
     const first = clipSegs[0].clip.date;
     const name = `${first.getFullYear()}${pad(first.getMonth() + 1)}${pad(first.getDate())}_${(s.title || TPL[s.tpl].name).replace(/[\\/:*?"<>|\s（）()]+/g, '_')}.mp4`;
     showExportResult(blob, name);
@@ -3216,6 +3372,15 @@ async function runOffline() {
   } catch (e) {
     if (!finished) cleanup();
     if (e && e.message === 'cancel') { setStatus('書き出しを中止しました'); return; }
+    if (e && e.message === 'stall' && Number($('height').value) > 1080) {
+      // 重すぎて進まない時は、画質を1段下げて自動でやり直す
+      const next = Number($('height').value) >= 2160 ? '1440' : '1080';
+      $('height').value = next;
+      saveProject();
+      setStatus(`処理が重く進まなくなったため、${next}pに下げて保存し直します…`);
+      setTimeout(() => run({ record: true }), 500);
+      return;
+    }
     console.error(e);
     setStatus(`なめらか書き出しに失敗しました（${e && e.message || e}）。従来の方式で書き出します…`);
     offlineCaps = null; // この端末では今後も従来の方式
@@ -3294,6 +3459,7 @@ function run({ record }) {
     let t0 = performance.now();
     const R = makeR(cv, s);
     R.nClips = clipSegs.length;
+    R.beat = lastEdit && lastEdit.beat;
 
     let stopped = false;
     const finish = (reason) => {
