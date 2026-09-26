@@ -183,6 +183,8 @@
   #eResult a { color: var(--accent); font-weight: 600; }
 
   .vh { position: fixed; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  label.pick.alt { margin-top: 8px; width: 100%; color: var(--muted); }
+  .inapp { border: 1px solid var(--accent); background: var(--sel); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; font-size: 13px; line-height: 1.6; }
   label.pick { display: flex; align-items: center; justify-content: center; text-align: center; -webkit-user-select: none; user-select: none; }
   #busy { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(6,8,12,.6);
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
@@ -225,12 +227,17 @@
       <div class="hero">
         <h1 class="brand">Tsumugi<span>つむぎ</span></h1>
         <p>思い出の動画を、1本のムービーにつむぐ。<br>動画をえらんで、長さとテンプレを決めるだけです。</p>
-        <p class="ver">ver 8 ・ night</p>
+        <p class="ver">ver 9 ・ night</p>
       </div>
       <div class="panel step">
         <h2><b>1</b>動画をえらぶ <span id="eCount" class="count"></span></h2>
         <div id="eThumbs"></div>
+        <div class="inapp" id="inapp" hidden>
+          いまアプリ内のブラウザで開いています。この画面では写真の選択がうまくいかないことがあります。<br>
+          右下のコンパス（🧭）や「Safariで開く」から <b>Safari</b> で開き直してください。
+        </div>
         <label for="files" class="btn primary big pick" id="eAdd" role="button">＋ 写真アプリから動画をえらぶ</label>
+        <label for="files2" class="btn small pick alt" role="button">うまく選べない時：「ファイル」からえらぶ</label>
         <p class="hint">最大15本まで。何回かに分けて追加しても大丈夫です。<br>右上の ✓ を押したあと、iPhoneが動画を準備するまで数秒〜数十秒かかることがあります（長い動画・iCloudの動画は特に）。</p>
       </div>
       <div class="panel step">
@@ -466,6 +473,7 @@
 </nav>
 <div id="hidden"></div>
 <input id="files" class="vh" type="file" accept="video/*,video/quicktime,video/mp4,video/x-m4v,.mov,.mp4,.m4v" multiple>
+<input id="files2" class="vh" type="file" multiple>
 <div id="busy" hidden>
   <div class="busybox">
     <div class="spinner"></div>
@@ -1613,8 +1621,10 @@ function makeSeg(clip, a, b, extra = {}) {
 const targetLen = () => $('target').value === 'none' ? 0 : Number($('target').value);
 
 // ---------- 素材の追加 ----------
+$('files2').onchange = (e) => $('files').onchange(e);
 $('files').onchange = async (e) => {
-  let files = [...e.target.files];
+  let files = [...e.target.files].filter(f => /^video\//.test(f.type) || /\.(mov|mp4|m4v)$/i.test(f.name));
+  if (!files.length && e.target.files.length) { e.target.value = ''; alert('動画ファイル（.mov / .mp4）をえらんでください'); return; }
   e.target.value = '';
   const room = MAX_CLIPS - clips.length;
   if (room <= 0) { alert(`素材は最大${MAX_CLIPS}本までです。いらない素材を削除してから追加してください。`); return; }
@@ -2635,6 +2645,8 @@ $('stop').onclick = () => {
   if (running.stop) running.stop();
   else { running = null; players.forEach(release); refresh(); }
 };
+
+if (/iPhone|iPad/.test(navigator.userAgent) && !/Safari\//.test(navigator.userAgent) && !navigator.standalone) $('inapp').hidden = false;
 
 // 新しい版を公開したら、次に開いた時に自動で入れ替える（古い版が残り続けないように）
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
