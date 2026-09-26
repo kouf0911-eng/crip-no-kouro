@@ -184,7 +184,8 @@
 
   .vh { position: fixed; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
   label.pick.done { opacity: .5; pointer-events: none; }
-  label.pick.alt { margin-top: 8px; width: 100%; color: var(--muted); }
+  .altrow { display: flex; gap: 8px; margin-top: 8px; }
+  label.pick.alt { flex: 1; color: var(--muted); white-space: normal; font-size: 12px; }
   .inapp { border: 1px solid var(--accent); background: var(--sel); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; font-size: 13px; line-height: 1.6; }
   label.pick { display: flex; align-items: center; justify-content: center; text-align: center; -webkit-user-select: none; user-select: none; }
   #busy { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(6,8,12,.6);
@@ -228,7 +229,7 @@
       <div class="hero">
         <h1 class="brand">Tsumugi<span>つむぎ</span></h1>
         <p>思い出の動画を、1本のムービーにつむぐ。<br>動画をえらんで、長さとテンプレを決めるだけです。</p>
-        <p class="ver">ver 11 ・ night</p>
+        <p class="ver">ver 12 ・ night</p>
       </div>
       <div class="panel step">
         <h2><b>1</b>動画をえらぶ <span id="eCount" class="count"></span></h2>
@@ -238,8 +239,12 @@
           右下のコンパス（🧭）や「Safariで開く」から <b>Safari</b> で開き直してください。
         </div>
         <label for="files" class="btn primary big pick" id="eAdd" role="button">＋ 写真アプリから動画をえらぶ</label>
-        <label for="files2" class="btn small pick alt" role="button">うまく選べない時：「ファイル」からえらぶ</label>
-        <p class="hint">まとめて最大15本までえらべます（写真をえらんだ場合は自動ではずします）。あとから追加もできます。</p>
+        <div class="altrow">
+          <label for="filesMulti" class="btn small pick alt" role="button">まとめてえらぶ</label>
+          <label for="files2" class="btn small pick alt" role="button">ファイルからまとめて</label>
+        </div>
+        <p class="hint">大きいボタンは1本ずつ、続けて何本でも追加できます（最大15本）。<br>
+          「まとめてえらぶ」は、iPhoneで撮ったままの動画だと ✓ が効かないことがあります（iOSの不具合）。その時は1本ずつか、写真アプリで動画を複数えらんで 共有 →「"ファイル"に保存」してから「ファイルからまとめて」を使ってください。</p>
       </div>
       <div class="panel step">
         <h2><b>2</b>長さと形をえらぶ</h2>
@@ -473,7 +478,9 @@
   <button data-go="out"><i>⬇️</i>書き出し</button>
 </nav>
 <div id="hidden"></div>
-<input id="files" class="vh" type="file" accept="image/*,video/*" multiple>
+<!-- iOS 26.5：撮ったままの動画は「複数選択」だと ✓ が効かないことがある。1本ずつ（確実）とまとめて（効く時だけ）を両方用意 -->
+<input id="files" class="vh" type="file" accept="video/*">
+<input id="filesMulti" class="vh" type="file" accept="image/*,video/*" multiple>
 <input id="files2" class="vh" type="file" multiple>
 <div id="busy" hidden>
   <div class="busybox">
@@ -1623,6 +1630,7 @@ const targetLen = () => $('target').value === 'none' ? 0 : Number($('target').va
 
 // ---------- 素材の追加 ----------
 $('files2').onchange = (e) => $('files').onchange(e);
+$('filesMulti').onchange = (e) => $('files').onchange(e);
 $('files').onchange = async (e) => {
   let files = [...e.target.files].filter(f => /^video\//.test(f.type) || /\.(mov|mp4|m4v)$/i.test(f.name));
   const skipped = e.target.files.length - files.length;
@@ -2237,7 +2245,7 @@ function markChips(id, value) {
 }
 
 function renderEasy() {
-  $('eAdd').textContent = !clips.length ? '＋ 写真アプリから動画をえらぶ' : clips.length >= MAX_CLIPS ? `${MAX_CLIPS}本えらびました` : `＋ 動画を追加する（${clips.length} / ${MAX_CLIPS}本）`;
+  $('eAdd').textContent = !clips.length ? '＋ 動画をえらぶ（1本ずつ）' : clips.length >= MAX_CLIPS ? `${MAX_CLIPS}本えらびました` : `＋ 次の動画をえらぶ（${clips.length} / ${MAX_CLIPS}本）`;
   $('eAdd').classList.toggle('done', clips.length >= MAX_CLIPS);
   $('eCount').textContent = clips.length ? `${clips.length} / ${MAX_CLIPS}本` : '';
   $('eStart').disabled = !clips.length || !!running;
