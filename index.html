@@ -228,7 +228,7 @@
       <div class="hero">
         <h1 class="brand">Tsumugi<span>つむぎ</span></h1>
         <p>思い出の動画を、1本のムービーにつむぐ。<br>動画をえらんで、長さとテンプレを決めるだけです。</p>
-        <p class="ver">ver 10 ・ night</p>
+        <p class="ver">ver 11 ・ night</p>
       </div>
       <div class="panel step">
         <h2><b>1</b>動画をえらぶ <span id="eCount" class="count"></span></h2>
@@ -239,7 +239,7 @@
         </div>
         <label for="files" class="btn primary big pick" id="eAdd" role="button">＋ 写真アプリから動画をえらぶ</label>
         <label for="files2" class="btn small pick alt" role="button">うまく選べない時：「ファイル」からえらぶ</label>
-        <p class="hint">1本ずつえらびます（最大15本）。えらぶたびに下に並ぶので、続けて追加してください。</p>
+        <p class="hint">まとめて最大15本までえらべます（写真をえらんだ場合は自動ではずします）。あとから追加もできます。</p>
       </div>
       <div class="panel step">
         <h2><b>2</b>長さと形をえらぶ</h2>
@@ -473,8 +473,8 @@
   <button data-go="out"><i>⬇️</i>書き出し</button>
 </nav>
 <div id="hidden"></div>
-<input id="files" class="vh" type="file" accept="video/*">
-<input id="files2" class="vh" type="file">
+<input id="files" class="vh" type="file" accept="image/*,video/*" multiple>
+<input id="files2" class="vh" type="file" multiple>
 <div id="busy" hidden>
   <div class="busybox">
     <div class="spinner"></div>
@@ -1625,7 +1625,9 @@ const targetLen = () => $('target').value === 'none' ? 0 : Number($('target').va
 $('files2').onchange = (e) => $('files').onchange(e);
 $('files').onchange = async (e) => {
   let files = [...e.target.files].filter(f => /^video\//.test(f.type) || /\.(mov|mp4|m4v)$/i.test(f.name));
-  if (!files.length && e.target.files.length) { e.target.value = ''; alert('動画ファイル（.mov / .mp4）をえらんでください'); return; }
+  const skipped = e.target.files.length - files.length;
+  if (!files.length && e.target.files.length) { e.target.value = ''; alert('動画をえらんでください（写真は使えません）'); return; }
+  if (skipped > 0) setTimeout(() => alert(`写真${skipped}枚は動画ではないため、はずしました`), 0);
   e.target.value = '';
   const room = MAX_CLIPS - clips.length;
   if (room <= 0) { alert(`素材は最大${MAX_CLIPS}本までです。いらない素材を削除してから追加してください。`); return; }
@@ -2235,7 +2237,7 @@ function markChips(id, value) {
 }
 
 function renderEasy() {
-  $('eAdd').textContent = !clips.length ? '＋ 写真アプリから動画をえらぶ' : clips.length >= MAX_CLIPS ? `${MAX_CLIPS}本えらびました` : `＋ 次の動画をえらぶ（${clips.length} / ${MAX_CLIPS}本）`;
+  $('eAdd').textContent = !clips.length ? '＋ 写真アプリから動画をえらぶ' : clips.length >= MAX_CLIPS ? `${MAX_CLIPS}本えらびました` : `＋ 動画を追加する（${clips.length} / ${MAX_CLIPS}本）`;
   $('eAdd').classList.toggle('done', clips.length >= MAX_CLIPS);
   $('eCount').textContent = clips.length ? `${clips.length} / ${MAX_CLIPS}本` : '';
   $('eStart').disabled = !clips.length || !!running;
