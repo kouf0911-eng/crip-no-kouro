@@ -184,6 +184,7 @@
 
   .vh { position: fixed; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
   label.pick.done { opacity: .5; pointer-events: none; }
+  .linkbtn { background: none; border: 0; padding: 0 0 0 6px; color: var(--accent); font: inherit; font-size: 11px; letter-spacing: .05em; text-decoration: underline; cursor: pointer; }
   .waitnote { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(240,180,106,.1); border: 1px solid rgba(240,180,106,.35); font-size: 13px; line-height: 1.6; }
   .waitnote b { color: var(--accent); }
   .altrow { display: flex; gap: 8px; margin-top: 8px; }
@@ -231,7 +232,7 @@
       <div class="hero">
         <h1 class="brand">Tsumugi<span>つむぎ</span></h1>
         <p>思い出の動画を、1本のムービーにつむぐ。<br>動画をえらんで、長さとテンプレを決めるだけです。</p>
-        <p class="ver">ver 13 ・ night</p>
+        <p class="ver">ver 14 ・ night　<button class="linkbtn" id="resetAll" hidden>最初からやり直す</button></p>
       </div>
       <div class="panel step">
         <h2><b>1</b>動画をえらぶ <span id="eCount" class="count"></span></h2>
@@ -295,6 +296,7 @@
           <button class="btn" id="eBack">← 動画・設定を変える</button>
           <button class="btn" id="ePro">✂️ 細かく編集する</button>
         </div>
+        <p style="margin:10px 0 0"><button class="linkbtn" id="resetAll2" style="padding:0">最初からやり直す（えらんだ動画を消す）</button></p>
         <p class="hint">保存は再生と同じ時間がかかります。途中でほかのアプリに切り替えると一時停止し、戻って「▶ 続きから」で再開できます。</p>
       </div>
     </div>
@@ -1606,6 +1608,118 @@ function showTab(name) {
 }
 document.querySelectorAll('nav.tabbar button').forEach(b => b.onclick = () => showTab(b.dataset.go));
 
+// ---------- 自動保存（iPhoneが画面オフ中にページを破棄しても元に戻せるよう、端末内に保存） ----------
+const DB = (() => {
+  let dbp = null;
+  const open = () => dbp || (dbp = new Promise((res, rej) => {
+    const r = indexedDB.open('tsumugi', 1);
+    r.onupgradeneeded = () => { r.result.createObjectStore('files'); r.result.createObjectStore('kv'); };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  }));
+  const tx = (store, mode, fn) => open().then(db => new Promise((res, rej) => {
+    const t = db.transaction(store, mode);
+    const req = fn(t.objectStore(store));
+    t.oncomplete = () => res(req && req.result);
+    t.onerror = t.onabort = () => rej(t.error);
+  }));
+  return {
+    get: (store, k) => tx(store, 'readonly', s => s.get(k)),
+    put: (store, k, v) => tx(store, 'readwrite', s => s.put(v, k)),
+    del: (store, k) => tx(store, 'readwrite', s => s.delete(k)),
+    clear: () => Promise.all(['files', 'kv'].map(n => tx(n, 'readwrite', s => s.clear()))),
+  };
+})();
+let restoring = false, booted = false, saveTimer = 0, saveWarned = false;
+
+function saveProject() {
+  if (restoring || !booted) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    if (restoring || !booted) return;
+    const project = {
+      v: 1, nextId, tplId, mode, view: document.body.classList.contains('result') ? 'result' : 'setup', tlManual, galleryCat,
+      settings: Object.fromEntries(['target', 'pace', 'aspect', 'height', 'fit', 'trans', 'td', 'title', 'dfmt', 'dpos', 'bgmVol', 'origVol'].map(id => [id, $(id).value])),
+      clips: clips.map(c => ({ id: c.id, name: c.name, type: c.type, duration: c.duration, w: c.w, h: c.h, date: c.date.getTime(), dateSource: c.dateSource,
+        include: c.include, thumb: c.thumb, strip: c.strip, scores: c.scores, step: c.step })),
+      segs: segs.map(g => ({ id: g.id, src: g.src.id, in: g.in, out: g.out, speed: g.speed, caption: g.caption, showDate: g.showDate, mute: g.mute })),
+      bgm: bgmFiles.map(f => ({ name: f.name, type: f.type })),
+    };
+    DB.put('kv', 'project', project).catch(() => {});
+  }, 400);
+}
+
+async function storeFile(key, file) {
+  try {
+    await DB.put('files', key, file);
+  } catch {
+    if (!saveWarned) { saveWarned = true; alert('iPhoneの空き容量が足りず、動画を端末に保存できませんでした。画面を消すと選び直しになることがあります。'); }
+  }
+}
+
+// 保存しておいた動画と編集内容を元に戻す
+async function restoreProject() {
+  let p;
+  try { p = await DB.get('kv', 'project'); } catch { return false; }
+  if (!p || !p.clips || !p.clips.length) return false;
+  restoring = true;
+  showBusy('前回の続きを復元しています', '', null);
+  try {
+    for (const [id, v] of Object.entries(p.settings || {})) if ($(id) && v != null) $(id).value = v;
+    $('eTitle').value = $('title').value;
+    if (p.tplId && TPL[p.tplId]) tplId = p.tplId;
+    galleryCat = p.galleryCat || 'all';
+    nextId = p.nextId || nextId;
+    tlManual = !!p.tlManual;
+    const byId = {};
+    for (const [i, m] of p.clips.entries()) {
+      showBusy('前回の続きを復元しています', `${i + 1} / ${p.clips.length}本`, i / p.clips.length);
+      const blob = await DB.get('files', `clip:${m.id}`).catch(() => null);
+      if (!blob) continue;
+      const img = new Image();
+      img.src = m.thumb;
+      await img.decode().catch(() => {});
+      const c = { ...m, date: new Date(m.date), url: URL.createObjectURL(blob), frame: img, analyzing: null };
+      clips.push(c);
+      byId[c.id] = c;
+    }
+    segs = (p.segs || []).filter(g => byId[g.src]).map(g => {
+      const seg = makeSeg(byId[g.src], g.in, g.out, { speed: g.speed, caption: g.caption, showDate: g.showDate, mute: g.mute });
+      seg.id = g.id;
+      return seg;
+    });
+    bgmFiles = [];
+    for (const [i, b] of (p.bgm || []).entries()) {
+      const blob = await DB.get('files', `bgm:${i}`).catch(() => null);
+      if (blob) bgmFiles.push(new File([blob], b.name, { type: b.type || blob.type }));
+    }
+    if (bgmFiles.length) {
+      $('bgmList').textContent = bgmFiles.map((f, i) => `${i + 1}. ${f.name}`).join('\n');
+      $('eBgmName').textContent = bgmFiles.map(f => f.name).join('、');
+    }
+    const last = await DB.get('files', 'export').catch(() => null);
+    const lastName = await DB.get('kv', 'exportName').catch(() => null);
+    restoring = false;
+    renderLibrary();
+    selectSeg(segs[0] || null);
+    setMode(p.mode === 'pro' ? 'pro' : 'easy', clips.length ? (segs.length && p.view === 'result' ? 'result' : 'setup') : 'setup');
+    if (last && lastName) showExportResult(last, lastName);
+    return clips.length > 0;
+  } finally {
+    restoring = false;
+    hideBusy();
+  }
+}
+
+async function resetProject() {
+  if (!confirm('えらんだ動画と編集内容をすべて消して、最初からはじめますか？')) return;
+  booted = false;
+  clearTimeout(saveTimer);
+  stopPreview();
+  await DB.clear().catch(() => {});
+  location.reload();
+}
+
 // ---------- 読み込み中の表示 ----------
 function showBusy(title, sub = '', frac = null) {
   $('busy').hidden = false;
@@ -1652,6 +1766,8 @@ $('files').onchange = async (e) => {
     showBusy('動画を読み込んでいます', `${i + 1} / ${files.length}本目`, i / files.length);
     try {
       const c = await loadClip(f);
+      c.type = f.type;
+      await storeFile(`clip:${c.id}`, f);
       clips.push(c);
       added.push(c);
     } catch {
@@ -1738,6 +1854,7 @@ function renderLibrary() {
       if (b.dataset.op === 'del') {
         segs = segs.filter(g => g.src !== c);
         clips.splice(i, 1);
+        DB.del('files', `clip:${c.id}`).catch(() => {});
         URL.revokeObjectURL(c.url);
         if (selSeg && selSeg.src === c) selectSeg(segs[0] || null);
       }
@@ -2204,6 +2321,7 @@ function drawStill() {
 }
 
 function refresh() {
+  saveProject();
   const { segs: items, total } = timeline();
   const any = clips.length > 0;
   $('sortBtn').disabled = !any;
@@ -2247,6 +2365,7 @@ function markChips(id, value) {
 }
 
 function renderEasy() {
+  $('resetAll').hidden = !clips.length;
   $('eAdd').textContent = !clips.length ? '＋ 動画をえらぶ（まとめてOK）' : clips.length >= MAX_CLIPS ? `${MAX_CLIPS}本えらびました` : `＋ 動画を追加する（${clips.length} / ${MAX_CLIPS}本）`;
   $('eAdd').classList.toggle('done', clips.length >= MAX_CLIPS);
   $('eCount').textContent = clips.length ? `${clips.length} / ${MAX_CLIPS}本` : '';
@@ -2268,6 +2387,7 @@ function renderEasy() {
       d.querySelector('button').onclick = () => {
         segs = segs.filter(g => g.src !== c);
         clips = clips.filter(x => x !== c);
+        DB.del('files', `clip:${c.id}`).catch(() => {});
         URL.revokeObjectURL(c.url);
         if (selSeg && selSeg.src === c) selectSeg(segs[0] || null);
         renderLibrary();
@@ -2327,6 +2447,7 @@ $('eTitle').addEventListener('input', () => { $('title').value = $('eTitle').val
 $('eTitle').addEventListener('change', refresh);
 $('title').addEventListener('input', () => { $('eTitle').value = $('title').value; });
 $('eBgm').onclick = () => $('bgm').click();
+$('resetAll').onclick = $('resetAll2').onclick = resetProject;
 
 $('eStart').onclick = async () => {
   if (!clips.length) return;
@@ -2417,10 +2538,37 @@ function release(p) {
 
 $('bgm').onchange = (e) => {
   bgmFiles = [...e.target.files];
+  bgmFiles.forEach((f, i) => storeFile(`bgm:${i}`, f));
+  saveProject();
   $('bgmList').textContent = bgmFiles.map((f, i) => `${i + 1}. ${f.name}`).join('\n');
   $('eBgmName').textContent = bgmFiles.map(f => f.name).join('、');
   if (bgmEl) bgmEl.removeAttribute('src');
 };
+
+function showExportResult(blob, name) {
+  const file = new File([blob], name, { type: blob.type });
+  for (const box of [$('eResult'), $('result')]) {
+    box.innerHTML = '';
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      const b = document.createElement('button');
+      b.className = 'btn primary big';
+      b.textContent = '写真に保存 / 共有';
+      b.onclick = () => navigator.share({ files: [file] }).catch(() => {});
+      box.appendChild(b);
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.textContent = `⬇ ${name}（${(blob.size / 1e6).toFixed(1)} MB）をダウンロード`;
+    box.appendChild(a);
+    if (!box.querySelector('button') && /iPhone|iPad/.test(navigator.userAgent)) {
+      const p = document.createElement('p');
+      p.className = 'hint';
+      p.textContent = '保存先は「ファイル」アプリ > ダウンロード です。写真アプリに入れるには、動画を開いて共有 >「ビデオを保存」。';
+      box.appendChild(p);
+    }
+  }
+}
 
 function pickMime() {
   const candidates = [
@@ -2521,27 +2669,8 @@ function run({ record }) {
         const blob = new Blob(chunks, { type: mime.split(';')[0] });
         const first = clipSegs[0].clip.date;
         const name = `${first.getFullYear()}${pad(first.getMonth() + 1)}${pad(first.getDate())}_${(s.title || TPL[s.tpl].name).replace(/[\\/:*?"<>|\s（）()]+/g, '_')}.${ext}`;
-        const file = new File([blob], name, { type: blob.type });
-        const box = mode === 'easy' ? $('eResult') : $('result');
-        box.innerHTML = '';
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          const b = document.createElement('button');
-          b.className = 'btn primary big';
-          b.textContent = '写真に保存 / 共有';
-          b.onclick = () => navigator.share({ files: [file] }).catch(() => {});
-          box.appendChild(b);
-        }
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = name;
-        a.textContent = `⬇ ${name}（${(blob.size / 1e6).toFixed(1)} MB）をダウンロード`;
-        box.appendChild(a);
-        if (!box.querySelector('button') && /iPhone|iPad/.test(navigator.userAgent)) {
-          const p = document.createElement('p');
-          p.className = 'hint';
-          p.textContent = '保存先は「ファイル」アプリ > ダウンロード です。写真アプリに入れるには、動画を開いて共有 >「ビデオを保存」。';
-          box.appendChild(p);
-        }
+        showExportResult(blob, name);
+        DB.put('files', 'export', blob).then(() => DB.put('kv', 'exportName', name)).catch(() => {});
         done();
         setStatus(ext === 'webm' ? '完了（WebM形式）' : '完了しました');
         if (mode === 'pro') showTab('out');
@@ -2668,7 +2797,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   const hadController = !!navigator.serviceWorker.controller;
   let reloaded = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!hadController || reloaded || running) return;
+    if (!hadController || reloaded || running || clips.length) return;
     reloaded = true;
     location.reload();
   });
@@ -2682,6 +2811,8 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
 selectSeg(null);
 renderLibrary();
 setMode('easy', 'setup');
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+restoreProject().catch(() => false).then((ok) => { booted = true; if (ok) setStatus('前回の続きを復元しました'); saveProject(); });
 </script>
 </body>
 </html>
