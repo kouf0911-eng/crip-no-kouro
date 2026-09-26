@@ -234,7 +234,7 @@
       <div class="hero">
         <h1 class="brand">Tsumugi<span>つむぎ</span></h1>
         <p>思い出の動画を、1本のムービーにつむぐ。<br>動画をえらんで、長さとテンプレを決めるだけです。</p>
-        <p class="ver">ver 17 ・ night　<button class="linkbtn" id="resetAll" hidden>最初からやり直す</button></p>
+        <p class="ver">ver 18 ・ night　<button class="linkbtn" id="resetAll" hidden>最初からやり直す</button></p>
       </div>
       <div class="panel step">
         <h2><b>1</b>動画をえらぶ <span id="eCount" class="count"></span></h2>
@@ -263,8 +263,9 @@
         </div>
         <p class="label">画質</p>
         <div class="chips" id="eQual">
-          <button data-v="720">標準<small>720p・早い</small></button><button data-v="1080">高画質<small>1080p</small></button><button data-v="1440">最高画質<small>1440p・重い</small></button>
+          <button data-v="720">標準<small>720p・早い</small></button><button data-v="1080">高画質<small>1080p</small></button><button data-v="1440">最高画質<small>1440p</small></button><button data-v="2160">4K<small>2160p・時間がかかる</small></button>
         </div>
+        <p class="hint" id="qualNote" hidden></p>
         <p class="label">編集のしかた</p>
         <div class="chips small" id="eOpts">
           <button data-k="order">🕒 撮影した順に並べる</button><button data-k="chapters">📅 日付の見出し</button>
@@ -486,6 +487,7 @@
             <option value="720">標準（720p・軽い）</option>
             <option value="1080">高画質（1080p）</option>
             <option value="1440">最高画質（1440p・重い）</option>
+            <option value="2160">4K（2160p・なめらか書き出しのみ）</option>
           </select></div>
         <div class="row"><label for="fit">向きが違う時</label>
           <select id="fit">
@@ -545,6 +547,8 @@ let nextId = 1;
 let tlManual = false;   // 手で編集したら true（おまかせの自動調整を止める）
 let bgmFiles = [];
 let running = null;
+let offlineCaps = null; // なめらか書き出しの対応状況。使えない端末では null（従来の録画方式にする）
+let exportMode = false;  // 書き出し中だけ true（本来の解像度で描く）
 let tplId = 'natural';
 try { tplId = localStorage.getItem('clip.tpl') || 'natural'; } catch {}
 
@@ -1671,7 +1675,10 @@ function settings(overrideTpl) {
     aspect = !used.length || portrait * 2 >= used.length ? '9:16' : '16:9';
   }
   const [aw, ah] = aspect.split(':').map(Number);
-  const scale = Number($('height').value) / Math.min(aw, ah);
+  // 4K など重い画質は、書き出しの時だけ使う（プレビューは1080pまで）。なめらか書き出しが使えない端末は1440pまで
+  let hsel = Number($('height').value);
+  if (hsel > 1440 && !offlineCaps) hsel = 1440;
+  const scale = (exportMode ? hsel : Math.min(hsel, 1080)) / Math.min(aw, ah);
   return {
     tpl: id,
     w: Math.round(aw * scale / 2) * 2, h: Math.round(ah * scale / 2) * 2,
@@ -2647,6 +2654,10 @@ function renderEasy() {
   markChips('eLen2', $('target').value);
   markChips('eShape', $('aspect').value);
   markChips('eQual', $('height').value);
+  $('qualNote').hidden = !($('height').value === '2160');
+  $('qualNote').textContent = offlineCaps
+    ? '4Kは1コマずつ丁寧に作るので、保存に動画の長さの5〜10倍ほどかかります（プレビューは軽い画質で表示します）。'
+    : 'この端末は「なめらか書き出し」に対応していないため、4Kの代わりに1440pで保存します。';
   markChips('eCat', galleryCat);
   document.querySelector('#eOpts [data-k="order"]').classList.toggle('on', $('order').value === 'chrono');
   document.querySelector('#eOpts [data-k="chapters"]').classList.toggle('on', $('chapters').value === 'on');
@@ -2886,7 +2897,6 @@ function pickMime() {
 // 画面で再生しながら録画する方式は、iPhoneが重いとコマが飛んでカクつく。
 // こちらは裏でゆっくり再生しながら1コマずつ時刻を付けて圧縮するので、素材どおりの動きになる。
 const OUT_FPS = 30;
-let offlineCaps = null; // { video: {...}, audio: {...} } 使えない端末では null（従来の録画方式にする）
 
 function loadScript(src) {
   return new Promise((res, rej) => {
@@ -2916,10 +2926,10 @@ async function checkOffline() {
 
 async function pickVideoConfig(w, h, bitrate) {
   // iPhoneはH.264（写真アプリでそのまま扱える）。H.264が無い環境だけVP9を使う
-  const list = [...['avc1.640033', 'avc1.4d0033', 'avc1.42e033', 'avc1.640028', 'avc1.42001f'].map(c => [c, 'avc']), ['vp09.00.41.08', 'vp9']];
+  const list = [...['avc1.640033', 'avc1.4d0033', 'avc1.42e033', 'avc1.640028', 'avc1.42001f'].map(c => [c, 'avc']), ['hvc1.1.6.L153.B0', 'hevc'], ['vp09.00.51.08', 'vp9'], ['vp09.00.41.08', 'vp9']];
   for (const [codec, muxer] of list) {
     for (const hw of ['prefer-hardware', 'no-preference']) {
-      const cfg = { codec, width: w, height: h, bitrate, framerate: OUT_FPS, hardwareAcceleration: hw, ...(muxer === 'avc' ? { avc: { format: 'avc' } } : {}) };
+      const cfg = { codec, width: w, height: h, bitrate, framerate: OUT_FPS, hardwareAcceleration: hw, ...(muxer === 'avc' ? { avc: { format: 'avc' } } : muxer === 'hevc' ? { hevc: { format: 'hevc' } } : {}) };
       try { if ((await VideoEncoder.isConfigSupported(cfg)).supported) return { cfg, muxer }; } catch {}
     }
   }
@@ -3037,7 +3047,9 @@ async function encodeAudio(buf, muxer, onProgress) {
 }
 
 async function runOffline() {
+  exportMode = true;
   const { segs: items, total, s } = timeline();
+  exportMode = false;
   const clipSegs = items.filter(g => g.kind === 'clip');
   ev.pause();
   ensureAudio();
@@ -3074,7 +3086,7 @@ async function runOffline() {
 
     // 2) 圧縮と箱詰めの準備（長い動画はファイルが大きくなりすぎないよう、ビットレートの上限を下げる）
     const px = Math.min(s.w, s.h);
-    const want = px >= 1440 ? 24e6 : px >= 1080 ? 14e6 : 6e6;
+    const want = px >= 2160 ? 45e6 : px >= 1440 ? 24e6 : px >= 1080 ? 14e6 : 6e6;
     const bitrate = Math.round(Math.min(want, 450e6 * 8 / Math.max(total, 1)));
     const picked = await pickVideoConfig(s.w, s.h, bitrate);
     if (!picked) throw new Error('この端末は動画の圧縮に対応していません');
@@ -3104,7 +3116,7 @@ async function runOffline() {
     // 画面に出ているコマの時刻（前の素材の遅れて届いた報告は使わない）
     const frameOf = (p) => hasRVFC && p.mt >= 0 && p.mtSrc === p.v.currentSrc && !p.v.seeking ? p.mt : p.v.currentTime;
     let lastProgress = performance.now();
-    let rate = px >= 1440 ? 0.3 : px >= 1080 ? 0.4 : 0.5; // 実際の何倍の速さで裏再生するか（自動で調整）
+    let rate = px >= 2160 ? 0.2 : px >= 1440 ? 0.3 : px >= 1080 ? 0.4 : 0.5; // 実際の何倍の速さで裏再生するか（自動で調整）
     let n = 0, paused = false, idle = 0;
     const applyRate = () => { for (const p of players) if (p.seg && !p.v.paused) p.v.playbackRate = p.seg.clip.speed * rate; };
     onVis = () => {
@@ -3212,9 +3224,11 @@ async function runOffline() {
 }
 
 function run({ record }) {
+  if (record && offlineCaps && !running) { runOffline(); return; }
+  if (record) exportMode = true;
   const { segs, total, s } = timeline();
+  exportMode = false;
   if (!segs.length || running) return;
-  if (record && offlineCaps) { runOffline(); return; }
   ev.pause();
 
   // ↓ iPhoneは「タップの直後」でないと音付きの再生を許可しないので、await より前に準備しておく
@@ -3265,7 +3279,7 @@ function run({ record }) {
       const stream = cv.captureStream(FPS);
       recDest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
       const px = Math.min(s.w, s.h);
-      recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: px >= 1440 ? 24e6 : px >= 1080 ? 14e6 : 6e6 });
+      recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: px >= 2160 ? 40e6 : px >= 1440 ? 24e6 : px >= 1080 ? 14e6 : 6e6 });
       recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
     }
 
