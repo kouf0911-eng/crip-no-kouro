@@ -29,8 +29,11 @@
   /* プレビュー（上部に固定） */
   #stage { position: sticky; top: 0; z-index: 5; background: var(--bg);
     padding: calc(8px + env(safe-area-inset-top)) 16px 8px; border-bottom: 1px solid var(--line); }
-  .canvas-wrap { display: flex; justify-content: center; }
-  canvas#cv { display: block; max-width: 100%; max-height: 36vh; border-radius: 10px; background: #000; }
+  .canvas-wrap { position: relative; display: flex; justify-content: center; }
+  canvas#cv { position: relative; z-index: 1; display: block; max-width: 100%; max-height: 36vh; border-radius: 10px; background: #000; }
+  /* 再生用の動画はプレビューの真裏に置く（iPhoneは「見えていない」動画の再生を止めるため、画面内に置いておく） */
+  #players { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; z-index: 0; overflow: hidden; }
+  #players video { position: absolute; inset: 0; width: 64px; height: 64px; }
   .transport { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
   .transport progress { flex: 1; height: 6px; accent-color: var(--accent); }
   #status { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 2px; min-height: 18px; }
@@ -104,7 +107,7 @@
 <body>
 <div class="wrap">
   <section id="stage">
-    <div class="canvas-wrap"><canvas id="cv"></canvas></div>
+    <div class="canvas-wrap"><div id="players"></div><canvas id="cv"></canvas></div>
     <div class="transport">
       <button class="btn small" id="play" disabled>▶ プレビュー</button>
       <button class="btn small" id="stop" disabled>■</button>
@@ -1359,6 +1362,11 @@ ev.addEventListener('timeupdate', () => {
   drawStill();
 });
 ev.addEventListener('seeked', drawStill);
+ev.addEventListener('play', function live() {
+  if (ev.paused || running) return;
+  drawStill();
+  requestAnimationFrame(live);
+});
 ev.addEventListener('loadeddata', drawStill);
 $('cap').oninput = () => { selClip().caption = $('cap').value; drawStill(); };
 $('cap').onchange = () => { renderList(); refresh(); };
@@ -1550,7 +1558,7 @@ function refresh() {
   const any = clips.length > 0;
   $('sortBtn').disabled = $('autoBtn').disabled = $('resetBtn').disabled = !any || !!running;
   $('play').disabled = $('rec').disabled = !segs.length || !!running;
-  if (!running) setStatus(segs.length ? `${TPL[tplId].name} ・ ${clips.filter(c => c.include).length}クリップ ・ ${fmtT(total)}` : '動画を追加してください');
+  if (!running) setStatus(segs.length ? `${TPL[tplId].name} ・ ${clips.filter(c => c.include).length}クリップ ・ ${fmtT(total)}　▶ でつないだムービーを再生` : '動画を追加してください');
   drawStill();
   if (!document.querySelector('[data-tab="tpl"]').hidden) renderGallery();
 }
@@ -1570,16 +1578,23 @@ function ensureAudio() {
   master.connect(audioCtx.destination);
   recDest = audioCtx.createMediaStreamDestination();
   master.connect(recDest);
+  // 映像と音を別の要素で再生する。映像はミュート（iPhoneでも自由に再生できる）、
+  // 音は同じファイルを<audio>で鳴らしてミキサーへ。音側で何かあっても映像は止まらない
   for (let i = 0; i < 3; i++) {
     const v = document.createElement('video');
+    v.muted = true;
     v.playsInline = true;
     v.setAttribute('playsinline', '');
+    v.setAttribute('muted', '');
     v.preload = 'auto';
-    $('hidden').appendChild(v);
+    $('players').appendChild(v);
+    const a = new Audio();
+    a.preload = 'auto';
+    $('hidden').appendChild(a);
     const gain = audioCtx.createGain();
     gain.gain.value = 0;
-    audioCtx.createMediaElementSource(v).connect(gain).connect(master);
-    players.push({ v, gain, seg: null, ready: false, token: 0 });
+    audioCtx.createMediaElementSource(a).connect(gain).connect(master);
+    players.push({ v, a, gain, seg: null, ready: false, token: 0 });
   }
   bgmEl = new Audio();
   $('hidden').appendChild(bgmEl);
@@ -1593,14 +1608,17 @@ async function prepare(p, g) {
   p.ready = false;
   g.player = p;
   if (p.v.src !== g.clip.url) p.v.src = g.clip.url;
+  if (p.a.src !== g.clip.url) p.a.src = g.clip.url;
   if (p.v.readyState < 1) await once(p.v, 'loadedmetadata').catch(() => {});
   await seekTo(p.v, g.clip.in);
+  try { p.a.currentTime = g.clip.in; } catch {}
   if (p.token === token) p.ready = true;
 }
 
 function release(p) {
   p.token++;
   p.v.pause();
+  p.a.pause();
   p.gain.gain.value = 0;
   if (p.seg) p.seg.player = null;
   p.seg = null;
@@ -1633,9 +1651,11 @@ function run({ record }) {
   audioCtx.resume();
   const clipSegs = segs.filter(g => g.kind === 'clip');
   players.forEach((p, i) => {
-    if (clipSegs[i] && p.v.src !== clipSegs[i].clip.url) p.v.src = clipSegs[i].clip.url;
+    if (clipSegs[i] && p.v.src !== clipSegs[i].clip.url) { p.v.src = clipSegs[i].clip.url; p.a.src = clipSegs[i].clip.url; }
     p.v.play().catch(() => {});
     p.v.pause();
+    p.a.play().catch(() => {});
+    p.a.pause();
   });
   let bgmIdx = 0;
   const bgmUrls = bgmFiles.map(f => URL.createObjectURL(f));
@@ -1759,8 +1779,25 @@ function run({ record }) {
         const p = g.player;
         if (!p) continue;
         if (local >= g.len) { g.done = true; release(p); continue; }
-        if (local >= 0 && p.ready && !g.started) { g.started = true; p.v.play().catch(() => {}); }
-        if (g.started && p.v.currentTime >= g.clip.out) p.v.pause();
+        const wantAudio = !g.clip.mute && s.origVol > 0;
+        if (local >= 0 && p.ready && !g.started) {
+          g.started = true;
+          g.lastVT = -1; g.stuck = 0;
+          p.v.play().catch(() => {});
+          if (wantAudio) { try { p.a.currentTime = p.v.currentTime; } catch {} p.a.play().catch(() => {}); }
+        }
+        if (g.started) {
+          const vt = p.v.currentTime;
+          if (vt >= g.clip.out - 0.02 || p.v.ended) { p.v.pause(); p.a.pause(); }
+          else {
+            // 見張り：映像が止まっていたら再生し直す（静止画のまま進むのを防ぐ）
+            g.stuck = vt === g.lastVT ? g.stuck + 1 : 0;
+            g.lastVT = vt;
+            if (p.v.paused || g.stuck > 20) { g.stuck = 0; p.v.play().catch(() => {}); }
+            // 音が映像からずれたら合わせ直す
+            if (wantAudio && !p.a.paused && Math.abs(p.a.currentTime - vt) > 0.25) { try { p.a.currentTime = vt; } catch {} }
+          }
+        }
       }
 
       const active = [];
