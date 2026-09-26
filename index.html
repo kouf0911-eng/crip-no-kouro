@@ -1,0 +1,1804 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#c2410c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="クリップ航路">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<title>clip-no-kouro</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1d1f; --muted: #6b6b70;
+    --line: #e2e0da; --accent: #c2410c; --accent-ink: #ffffff; --sel: #fff1e8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111113; --panel: #1c1c1f; --ink: #ececef; --muted: #9a9aa2; --line: #2f2f34; --sel: #3a2a20; }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.6 system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif;
+    padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+  .wrap { max-width: 720px; margin: 0 auto; }
+
+  /* プレビュー（上部に固定） */
+  #stage { position: sticky; top: 0; z-index: 5; background: var(--bg);
+    padding: calc(8px + env(safe-area-inset-top)) 16px 8px; border-bottom: 1px solid var(--line); }
+  .canvas-wrap { display: flex; justify-content: center; }
+  canvas#cv { display: block; max-width: 100%; max-height: 36vh; border-radius: 10px; background: #000; }
+  .transport { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .transport progress { flex: 1; height: 6px; accent-color: var(--accent); }
+  #status { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 2px; min-height: 18px; }
+
+  main { padding: 12px 16px 24px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+  .panel h2 { margin: 0 0 10px; font-size: 13px; color: var(--muted); font-weight: 600; letter-spacing: .06em; }
+  .row { display: grid; grid-template-columns: 104px 1fr; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .row > label:first-child, .row > span:first-child { color: var(--muted); font-size: 14px; }
+  input[type=text], select, input[type=datetime-local] {
+    width: 100%; min-height: 40px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: transparent; color: inherit; font: inherit; font-size: 16px; min-width: 0; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .check { display: flex; align-items: center; gap: 8px; min-height: 36px; }
+  .check input { width: 20px; height: 20px; accent-color: var(--accent); }
+  .btn { min-height: 40px; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel);
+    color: var(--ink); font: inherit; cursor: pointer; white-space: nowrap; }
+  .btn.small { min-height: 34px; padding: 4px 10px; font-size: 13px; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .btn.big { width: 100%; min-height: 52px; font-size: 17px; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .hint { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+  .empty { text-align: center; color: var(--muted); padding: 20px 8px; }
+
+  /* 素材リスト */
+  #list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+  .item { display: grid; grid-template-columns: 26px 72px 1fr auto; gap: 8px; align-items: center;
+    border: 1px solid var(--line); border-radius: 10px; padding: 6px; }
+  .item.sel { background: var(--sel); border-color: var(--accent); }
+  .item.off { opacity: .5; }
+  .item input { width: 20px; height: 20px; accent-color: var(--accent); }
+  .item img { width: 72px; height: 48px; object-fit: cover; border-radius: 6px; background: #000; }
+  .item .meta { min-width: 0; font-size: 12px; line-height: 1.45; }
+  .item .meta b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .meta span { color: var(--muted); }
+  .item .ops { display: flex; }
+  .item .ops button { border: 0; background: none; color: var(--muted); font-size: 18px; cursor: pointer; width: 32px; height: 36px; }
+
+  /* 編集 */
+  #strip { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 10px; }
+  #strip img { width: 64px; height: 44px; object-fit: cover; border-radius: 6px; border: 2px solid transparent; flex: none; cursor: pointer; }
+  #strip img.sel { border-color: var(--accent); }
+  #ev { width: 100%; max-height: 34vh; background: #000; border-radius: 10px; display: block; }
+  .trim { display: grid; grid-template-columns: 36px 1fr 56px; gap: 8px; align-items: center; margin-top: 10px; }
+  .trim output { font-variant-numeric: tabular-nums; font-size: 13px; text-align: right; }
+
+  /* テンプレート */
+  #gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+  .tpl { border: 2px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); cursor: pointer; text-align: left; padding: 0; color: inherit; font: inherit; }
+  .tpl.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+  .tpl canvas { display: block; width: 100%; background: #000; }
+  .tpl div { padding: 5px 6px 7px; }
+  .tpl b { display: block; font-size: 13px; line-height: 1.35; }
+  .tpl span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 11px; color: var(--muted); line-height: 1.4; }
+
+  #result { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  #result a { color: var(--accent); font-weight: 600; }
+  #bgmList { font-size: 12px; color: var(--muted); margin: -4px 0 10px; white-space: pre-line; }
+
+  /* 下部タブ */
+  nav.tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: var(--panel);
+    border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, 1fr);
+    padding-bottom: env(safe-area-inset-bottom); }
+  nav.tabbar button { background: none; border: 0; color: var(--muted); font: inherit; font-size: 11px; padding: 8px 0 6px; cursor: pointer; }
+  nav.tabbar button i { display: block; font-style: normal; font-size: 20px; line-height: 1.2; }
+  nav.tabbar button.on { color: var(--accent); font-weight: 600; }
+  #hidden { position: fixed; left: 0; top: 0; width: 2px; height: 2px; opacity: 0; pointer-events: none; overflow: hidden; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="stage">
+    <div class="canvas-wrap"><canvas id="cv"></canvas></div>
+    <div class="transport">
+      <button class="btn small" id="play" disabled>▶ プレビュー</button>
+      <button class="btn small" id="stop" disabled>■</button>
+      <progress id="prog" value="0" max="1"></progress>
+    </div>
+    <div id="status">動画を追加してください</div>
+  </section>
+
+  <main>
+    <!-- 1. 素材 -->
+    <section class="tab" data-tab="clips">
+      <div class="panel">
+        <h2>素材</h2>
+        <button class="btn primary big" id="addBtn">＋ 写真アプリから動画をえらぶ</button>
+        <input id="files" type="file" accept="video/*" multiple hidden>
+        <div id="list"></div>
+        <div class="btns" style="margin-top:10px">
+          <button class="btn small" id="sortBtn" disabled>撮影日順に並べる</button>
+        </div>
+        <p class="hint">チェックを外したクリップは使いません。↑↓で順番を入れ替えます。</p>
+      </div>
+      <div class="panel">
+        <h2>おまかせ編集</h2>
+        <div class="row"><label for="target">全体の長さ</label>
+          <select id="target">
+            <option value="15">15秒</option>
+            <option value="30" selected>30秒</option>
+            <option value="60">1分</option>
+            <option value="90">1分30秒</option>
+            <option value="180">3分</option>
+          </select></div>
+        <div class="btns">
+          <button class="btn primary" id="autoBtn" disabled>見どころを自動でつなぐ</button>
+          <button class="btn" id="resetBtn" disabled>元に戻す</button>
+        </div>
+        <p class="hint">各クリップから動きの多い場面を探して、全体の長さに収まるよう切り出します。あとから「編集」タブで手直しできます。</p>
+      </div>
+    </section>
+
+    <!-- 2. 編集 -->
+    <section class="tab" data-tab="edit" hidden>
+      <div class="panel" id="editor">
+        <h2>クリップの編集</h2>
+        <div id="strip"></div>
+        <div id="editBody">
+          <video id="ev" controls playsinline preload="auto"></video>
+          <div class="trim">
+            <span>開始</span><input id="inR" type="range" min="0" step="0.05"><output id="inO"></output>
+            <span>終了</span><input id="outR" type="range" min="0" step="0.05"><output id="outO"></output>
+          </div>
+          <div class="btns" style="margin:8px 0 12px">
+            <button class="btn small" id="setIn">今の位置を開始に</button>
+            <button class="btn small" id="setOut">今の位置を終了に</button>
+            <button class="btn small" id="playSeg">区間を再生</button>
+          </div>
+          <p class="hint" id="segLen" style="margin:-4px 0 12px"></p>
+          <div class="row"><label for="cap">テロップ</label><input id="cap" type="text" placeholder="例：朝の散歩"></div>
+          <div class="row"><label for="dt">撮影日時</label><input id="dt" type="datetime-local"></div>
+          <p class="hint" id="dtSrc" style="margin:-6px 0 8px"></p>
+          <label class="check"><input id="showDate" type="checkbox"> 撮影日を表示する</label>
+          <label class="check"><input id="mute" type="checkbox"> このクリップの元の音を消す</label>
+        </div>
+        <p class="empty" id="editEmpty">「素材」タブで動画を追加してください</p>
+      </div>
+    </section>
+
+    <!-- 3. テンプレート -->
+    <section class="tab" data-tab="tpl" hidden>
+      <div class="panel">
+        <h2>テンプレート</h2>
+        <div id="gallery"></div>
+      </div>
+      <div class="panel">
+        <h2>文字と切り替え</h2>
+        <div class="row"><label for="title">タイトル</label><input id="title" type="text" placeholder="例：2026 夏の京都"></div>
+        <div class="row"><label for="trans">切り替え</label>
+          <select id="trans">
+            <option value="auto">テンプレートにおまかせ</option>
+            <option value="cross">クロスフェード</option>
+            <option value="black">暗転</option>
+            <option value="white">白フラッシュ</option>
+            <option value="zoom">ズーム</option>
+            <option value="slide">スライド</option>
+            <option value="glitch">グリッチ</option>
+            <option value="cut">カット</option>
+          </select></div>
+        <div class="row"><label for="td">切り替えの速さ</label>
+          <select id="td">
+            <option value="auto">おまかせ</option>
+            <option value="0.3">速い</option>
+            <option value="0.7">ふつう</option>
+            <option value="1.2">ゆっくり</option>
+          </select></div>
+        <div class="row"><label for="dfmt">撮影日の書式</label>
+          <select id="dfmt">
+            <option value="dot">2026.09.26</option>
+            <option value="dothm">2026.09.26 14:05</option>
+            <option value="jp">2026年9月26日</option>
+            <option value="jpfull">2026年9月26日(土) 14:05</option>
+          </select></div>
+        <div class="row"><label for="dpos">撮影日の位置</label>
+          <select id="dpos">
+            <option value="br">右下</option>
+            <option value="bl">左下</option>
+            <option value="tr">右上</option>
+            <option value="tl">左上</option>
+          </select></div>
+        <p class="hint">デジカメ日付・ビデオカメラREC・VHS などは、撮影日の見た目をテンプレート側で決めています。</p>
+      </div>
+    </section>
+
+    <!-- 4. 書き出し -->
+    <section class="tab" data-tab="out" hidden>
+      <div class="panel">
+        <h2>音楽</h2>
+        <div class="row"><label for="bgm">BGM</label><input id="bgm" type="file" accept="audio/*,.m4a,.mp3,.aac,.wav" multiple></div>
+        <div id="bgmList"></div>
+        <div class="row"><label for="bgmVol">BGMの音量</label><input id="bgmVol" type="range" min="0" max="1" step="0.05" value="0.8"></div>
+        <div class="row"><label for="origVol">元の音の音量</label><input id="origVol" type="range" min="0" max="1" step="0.05" value="0.5"></div>
+        <p class="hint">iPhoneでは「ファイル」アプリにある曲をえらべます（ミュージックアプリの曲はえらべません）。PCのiTunesの曲を使うなら、AirDropかiCloud Driveで「ファイル」に入れておいてください。Apple Musicの配信曲は保護されているため使えません。</p>
+      </div>
+      <div class="panel">
+        <h2>画面</h2>
+        <div class="row"><label for="aspect">比率</label>
+          <select id="aspect">
+            <option value="auto">素材に合わせる</option>
+            <option value="9:16">9:16 縦（ストーリーズ等）</option>
+            <option value="16:9">16:9 横</option>
+            <option value="1:1">1:1 正方形</option>
+            <option value="4:5">4:5 縦長</option>
+          </select></div>
+        <div class="row"><label for="height">画質</label>
+          <select id="height">
+            <option value="720">720p（軽い）</option>
+            <option value="1080">1080p（きれい）</option>
+          </select></div>
+        <div class="row"><label for="fit">向きが違う時</label>
+          <select id="fit">
+            <option value="blur">全体を表示＋ぼかし背景</option>
+            <option value="cover">画面いっぱいに切り抜き</option>
+            <option value="contain">全体を表示＋黒帯</option>
+          </select></div>
+      </div>
+      <div class="panel">
+        <h2>書き出し</h2>
+        <button class="btn primary big" id="rec" disabled>● 動画を書き出す</button>
+        <div id="result"></div>
+        <p class="hint">再生と同じ時間がかかります（30秒の動画なら30秒）。書き出し中は画面を消したり、ほかのアプリに切り替えたりしないでください。</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<nav class="tabbar">
+  <button data-go="clips" class="on"><i>🎞</i>素材</button>
+  <button data-go="edit"><i>✂️</i>編集</button>
+  <button data-go="tpl"><i>✨</i>テンプレ</button>
+  <button data-go="out"><i>⬇️</i>書き出し</button>
+</nav>
+<div id="hidden"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const cv = $('cv');
+const ev = $('ev');
+const FPS = 30;
+$('height').value = matchMedia('(max-width: 800px)').matches ? '720' : '1080';
+
+// clip: { id, name, url, duration, w, h, date, dateSource, caption, showDate, mute, include, in, out, thumb, frame, scores, step }
+let clips = [];
+let selId = null;
+let nextId = 1;
+let bgmFiles = [];
+let running = null;
+let tplId = 'natural';
+try { tplId = localStorage.getItem('clip.tpl') || 'natural'; } catch {}
+
+// ---------- 汎用 ----------
+function setStatus(msg) { $('status').textContent = msg; }
+const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
+const fmtT = (s) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
+const pad = (n) => String(n).padStart(2, '0');
+const E = {
+  out: (t) => 1 - Math.pow(1 - t, 3),
+  inOut: (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2,
+  back: (t) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); },
+};
+
+function once(el, evName, timeout = 15000) {
+  return new Promise((res, rej) => {
+    const done = (fn, arg) => { clearTimeout(timer); el.removeEventListener(evName, ok); el.removeEventListener('error', ng); fn(arg); };
+    const ok = () => done(res);
+    const ng = () => done(rej, new Error('media error'));
+    const timer = setTimeout(() => done(rej, new Error('timeout')), timeout);
+    el.addEventListener(evName, ok);
+    el.addEventListener('error', ng);
+  });
+}
+
+function seekTo(v, t) {
+  return new Promise((res) => {
+    const timer = setTimeout(done, 3000);
+    function done() { clearTimeout(timer); v.removeEventListener('seeked', done); res(); }
+    v.addEventListener('seeked', done);
+    v.currentTime = t;
+  });
+}
+
+function hiddenVideo(url) {
+  const v = document.createElement('video');
+  v.muted = true;
+  v.playsInline = true;
+  v.setAttribute('playsinline', '');
+  v.preload = 'auto';
+  v.src = url;
+  $('hidden').appendChild(v);
+  return v;
+}
+
+// iPhoneは一度再生しないとフレームを描けないことがあるので、ミュートで一瞬再生して止める
+async function primeVideo(v) {
+  try { await v.play(); } catch {}
+  v.pause();
+}
+
+// ---------- 撮影日時の読み取り（MOV / MP4 のメタデータ） ----------
+const td = new TextDecoder();
+const str4 = (dv, o) => String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3));
+const strN = (dv, o, n) => td.decode(new Uint8Array(dv.buffer, dv.byteOffset + o, clamp(n, 0, dv.byteLength - o)));
+
+function* boxes(dv, start, end) {
+  let o = start;
+  while (o + 8 <= end) {
+    let size = dv.getUint32(o), hdr = 8;
+    const type = str4(dv, o + 4);
+    if (size === 1) { size = Number(dv.getBigUint64(o + 8)); hdr = 16; }
+    else if (size === 0) size = end - o;
+    if (size < 8 || o + size > end) return;
+    yield { type, at: o, start: o + hdr, end: o + size };
+    o += size;
+  }
+}
+const findBox = (dv, s, e, type) => { for (const b of boxes(dv, s, e)) if (b.type === type) return b; return null; };
+
+function parseIsoLocal(s) {
+  // iPhoneは "2026-09-26T14:05:31+0900" のように撮影地の現地時刻で入っているので、その数字をそのまま使う
+  const m = s.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+  return m ? new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)) : null;
+}
+
+function parseMoov(dv, s, e) {
+  const metas = [];
+  const m1 = findBox(dv, s, e, 'meta');
+  if (m1) metas.push(m1);
+  const udta = findBox(dv, s, e, 'udta');
+  const m2 = udta && findBox(dv, udta.start, udta.end, 'meta');
+  if (m2) metas.push(m2);
+
+  for (const m of metas) {
+    // QuickTimeのmetaは素のbox、MP4のmetaはversion/flags付き
+    const ms = str4(dv, m.start + 4) === 'hdlr' ? m.start : m.start + 4;
+    const keys = findBox(dv, ms, m.end, 'keys');
+    const ilst = findBox(dv, ms, m.end, 'ilst');
+    if (!keys || !ilst) continue;
+    const count = dv.getUint32(keys.start + 4);
+    let o = keys.start + 8, idx = -1;
+    for (let i = 1; i <= count && o + 8 <= keys.end; i++) {
+      const ks = dv.getUint32(o);
+      if (ks < 8) break;
+      if (strN(dv, o + 8, ks - 8) === 'com.apple.quicktime.creationdate') idx = i;
+      o += ks;
+    }
+    if (idx < 0) continue;
+    for (const item of boxes(dv, ilst.start, ilst.end)) {
+      if (dv.getUint32(item.at + 4) !== idx) continue;
+      const data = findBox(dv, item.start, item.end, 'data');
+      const d = data && parseIsoLocal(strN(dv, data.start + 8, data.end - data.start - 8));
+      if (d) return { date: d, source: 'iPhoneの撮影日時' };
+    }
+  }
+
+  const mvhd = findBox(dv, s, e, 'mvhd');
+  if (mvhd) {
+    const ver = dv.getUint8(mvhd.start);
+    const secs = ver === 1 ? Number(dv.getBigUint64(mvhd.start + 4)) : dv.getUint32(mvhd.start + 4);
+    if (secs > 2082844800) return { date: new Date((secs - 2082844800) * 1000), source: '動画の作成日時' };
+  }
+  return null;
+}
+
+async function readCreationDate(file) {
+  let off = 0;
+  for (let guard = 0; guard < 64 && off + 8 <= file.size; guard++) {
+    const dv = new DataView(await file.slice(off, off + 16).arrayBuffer());
+    let size = dv.getUint32(0), hdr = 8;
+    const type = str4(dv, 4);
+    if (size === 1) { size = Number(dv.getBigUint64(8)); hdr = 16; }
+    else if (size === 0) size = file.size - off;
+    if (size < 8) break;
+    if (type === 'moov') {
+      const moov = new DataView(await file.slice(off, off + size).arrayBuffer());
+      return parseMoov(moov, hdr, size);
+    }
+    off += size;
+  }
+  return null;
+}
+
+// ---------- 描画の部品 ----------
+const FONTS = {
+  sans: 'system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif',
+  serif: '"Hiragino Mincho ProN", "Yu Mincho", Georgia, serif',
+  mono: '"Courier New", ui-monospace, Menlo, monospace',
+  round: '"Hiragino Maru Gothic ProN", "BIZ UDPGothic", "Yu Gothic UI", sans-serif',
+  hand: '"Bradley Hand", "Segoe Print", "Hiragino Maru Gothic ProN", cursive',
+};
+const WEEK = '日月火水木金土';
+const WEEK_EN = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const MON = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+function fmtDate(d, f) {
+  const Y = d.getFullYear(), M = d.getMonth() + 1, D = d.getDate(), hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  switch (f) {
+    case 'dot': return `${Y}.${pad(M)}.${pad(D)}`;
+    case 'dothm': return `${Y}.${pad(M)}.${pad(D)} ${hm}`;
+    case 'jp': return `${Y}年${M}月${D}日`;
+    case 'jpfull': return `${Y}年${M}月${D}日(${WEEK[d.getDay()]}) ${hm}`;
+    case 'en': return `${MON[d.getMonth()]} ${pad(D)} ${Y}`;
+    case 'digicam': return `'${String(Y).slice(2)}  ${M}  ${D}`;
+    case 'short': return `${M}.${D} ${WEEK_EN[d.getDay()]}`;
+    case 'time': return hm;
+  }
+}
+
+function roundRect(c, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+}
+
+// 文字（アニメーション・縁取り・背景・発光に対応）
+function txt(R, str, x, y, size, o = {}) {
+  str = String(str ?? '');
+  if (!str) return;
+  const c = R.ctx;
+  let alpha = o.alpha ?? 1, sc = o.scale || 1, dx = 0;
+  const L = o.local ?? 99;
+  switch (o.anim) {
+    case 'pop': sc *= L < 0.4 ? Math.max(0.01, E.back(L / 0.4)) : 1; alpha *= clamp(L / 0.12, 0, 1); break;
+    case 'type': { const ch = [...str]; str = ch.slice(0, Math.max(1, Math.floor(L / 0.07) + 1)).join(''); break; }
+    case 'slide': dx = -(1 - E.out(clamp(L / 0.45, 0, 1))) * size * 1.5; alpha *= clamp(L / 0.3, 0, 1); break;
+    case 'fade': alpha *= clamp(L / 0.4, 0, 1); break;
+  }
+  if (alpha <= 0.002) return;
+  const align = o.align || 'center';
+  c.save();
+  c.globalAlpha = alpha;
+  c.translate(x + dx, y);
+  if (o.rot) c.rotate(o.rot);
+  c.scale(sc, sc);
+  c.font = `${o.weight || (o.font === 'serif' ? 600 : 700)} ${Math.max(1, Math.round(size))}px ${FONTS[o.font || 'sans']}`;
+  c.textAlign = align;
+  c.textBaseline = 'middle';
+  if ('letterSpacing' in c) c.letterSpacing = `${o.spacing || 0}px`;
+  const maxW = o.maxW || R.w * 0.9;
+  if (o.bg) {
+    const tw = Math.min(c.measureText(str).width, maxW);
+    const p = size * 0.5;
+    const bx = align === 'center' ? -tw / 2 - p : align === 'left' ? -p : -tw - p;
+    c.fillStyle = o.bg;
+    if (o.bgShadow) { c.shadowColor = 'rgba(0,0,0,.25)'; c.shadowBlur = size * 0.4; c.shadowOffsetY = size * 0.08; }
+    roundRect(c, bx, -size * 0.5 - p * 0.55, tw + p * 2, size + p * 1.1, o.bgR ?? size);
+    c.fill();
+    c.shadowColor = 'transparent';
+  }
+  if (o.glow) { c.shadowColor = o.glow; c.shadowBlur = size * 0.7; }
+  else if (o.shadow !== false) { c.shadowColor = 'rgba(0,0,0,.65)'; c.shadowBlur = size * 0.35; }
+  if (o.strokes) {
+    c.lineJoin = 'round';
+    for (const [col, wd] of o.strokes) { c.strokeStyle = col; c.lineWidth = wd * size; c.strokeText(str, 0, 0, maxW); }
+    c.shadowColor = 'transparent';
+  }
+  c.fillStyle = o.color || '#fff';
+  c.fillText(str, 0, 0, maxW);
+  if (o.glow) c.fillText(str, 0, 0, maxW);
+  c.restore();
+}
+
+// 色の調整（ctx.filter を使わず合成モードで表現するので、iPhoneのSafariでも同じ見た目になる）
+function op(R, mode, a, fn) { const c = R.ctx; c.save(); c.globalCompositeOperation = mode; c.globalAlpha = a; fn(c); c.restore(); }
+function fill(R, style) { R.ctx.fillStyle = style; R.ctx.fillRect(0, 0, R.w, R.h); }
+const selfDraw = (R) => R.ctx.drawImage(R.cv, 0, 0);
+const contrast = (R, a) => op(R, 'soft-light', a, () => selfDraw(R));
+const desat = (R, a) => op(R, 'saturation', a, () => fill(R, '#808080'));
+const saturate = (R, a) => op(R, 'saturation', a, () => fill(R, 'hsl(20,100%,50%)'));
+const tint = (R, mode, color, a) => op(R, mode, a, () => fill(R, color));
+const bloom = (R, a) => op(R, 'screen', a, () => selfDraw(R));
+
+const noiseTiles = Array.from({ length: 4 }, () => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 192;
+  const x = c.getContext('2d');
+  const img = x.createImageData(192, 192);
+  for (let p = 0; p < img.data.length; p += 4) {
+    const g = Math.random() * 255;
+    img.data[p] = img.data[p + 1] = img.data[p + 2] = g;
+    img.data[p + 3] = 255;
+  }
+  x.putImageData(img, 0, 0);
+  return c;
+});
+function grain(R, a) {
+  op(R, 'overlay', a, (c) => {
+    const k = Math.max(0.3, R.u / 720);
+    c.translate(-Math.random() * 192 * k, -Math.random() * 192 * k);
+    c.scale(k, k);
+    c.fillStyle = c.createPattern(noiseTiles[Math.floor(Math.random() * 4)], 'repeat');
+    c.fillRect(0, 0, R.w / k + 200, R.h / k + 200);
+  });
+}
+function vignette(R, a, inner = 0.35) {
+  const { w, h } = R;
+  const g = R.ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * inner, w / 2, h / 2, Math.hypot(w, h) / 2);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(1, `rgba(0,0,0,${a})`);
+  fill(R, g);
+}
+function scanlines(R, a) {
+  op(R, 'source-over', a, (c) => {
+    const step = Math.max(2, Math.round(R.h / 240));
+    c.fillStyle = '#000';
+    for (let y = 0; y < R.h; y += step * 2) c.fillRect(0, y, R.w, step);
+  });
+}
+function flicker(R, a) {
+  op(R, 'source-over', Math.random() * a, () => fill(R, Math.random() < 0.5 ? '#fff' : '#000'));
+}
+function scratches(R) {
+  const c = R.ctx;
+  c.save();
+  c.fillStyle = 'rgba(255,255,255,.35)';
+  if (Math.random() < 0.35) c.fillRect(Math.random() * R.w, 0, Math.max(1, R.u / 500), R.h);
+  c.fillStyle = 'rgba(0,0,0,.5)';
+  for (let i = 0; i < 3; i++) if (Math.random() < 0.3) {
+    c.beginPath(); c.arc(Math.random() * R.w, Math.random() * R.h, (1 + Math.random() * 3) * R.u / 720, 0, 7); c.fill();
+  }
+  c.restore();
+}
+function glitch(R, k) {
+  const c = R.ctx, n = 3 + Math.floor(k * 7);
+  for (let i = 0; i < n; i++) {
+    const y = Math.random() * R.h, hh = Math.random() * R.h * 0.07 * k + 2, dx = (Math.random() - 0.5) * R.w * 0.1 * k;
+    c.drawImage(R.cv, 0, y, R.w, hh, dx, y, R.w, hh);
+  }
+}
+const tmpCv = document.createElement('canvas');
+function chroma(R, off) {
+  // 赤だけを取り出してずらして重ねる＝本物のRGBずれ
+  tmpCv.width = R.w; tmpCv.height = R.h;
+  const t = tmpCv.getContext('2d');
+  t.drawImage(R.cv, 0, 0);
+  t.globalCompositeOperation = 'multiply';
+  t.fillStyle = '#f00';
+  t.fillRect(0, 0, R.w, R.h);
+  t.globalCompositeOperation = 'source-over';
+  op(R, 'multiply', 1, () => fill(R, '#0ff'));
+  op(R, 'lighter', 1, (c) => c.drawImage(tmpCv, off, 0));
+}
+function letterbox(R, ratio = 2.39, portrait = 0.08) {
+  return R.w > R.h ? Math.max(0, (R.h - R.w / ratio) / 2) : Math.round(R.h * portrait);
+}
+
+const blurA = document.createElement('canvas'), blurB = document.createElement('canvas');
+function srcSize(src) { return [src.videoWidth || src.width, src.videoHeight || src.height]; }
+// 縮小→拡大でぼかした背景（ctx.filter非対応のiPhoneでも動く）
+function blurBg(R, src, dark = 0.35) {
+  const [vw, vh] = srcSize(src);
+  const { w, h } = R;
+  blurA.width = 24; blurA.height = Math.max(1, Math.round(24 * h / w));
+  blurB.width = 96; blurB.height = Math.max(1, Math.round(96 * h / w));
+  const cover = Math.max(w / vw, h / vh), k = 24 / w;
+  blurA.getContext('2d').drawImage(src, (w - vw * cover) / 2 * k, (h - vh * cover) / 2 * k, vw * cover * k, vh * cover * k);
+  blurB.getContext('2d').drawImage(blurA, 0, 0, blurB.width, blurB.height);
+  R.ctx.imageSmoothingQuality = 'high';
+  R.ctx.drawImage(blurB, 0, 0, w, h);
+  if (dark) { R.ctx.fillStyle = `rgba(0,0,0,${dark})`; R.ctx.fillRect(0, 0, w, h); }
+}
+
+// ---------- テンプレートの共通部品 ----------
+function captionDefault(R, c, a, local, o = {}) {
+  if (!c.caption.trim()) return;
+  const size = R.u * (o.size || 0.05);
+  const y = R.bar > size * 1.3 ? R.h - R.bar / 2 : R.h - R.u * 0.07 - size * 0.5;
+  txt(R, c.caption, R.w / 2, y, size, {
+    font: R.tpl.font, anim: R.tpl.textAnim, local, alpha: a,
+    spacing: R.tpl.font === 'serif' ? size * 0.08 : 0, ...o,
+  });
+}
+
+function dateDefault(R, c, a, local, o = {}) {
+  const s = R.s;
+  const size = R.u * (o.size || 0.032);
+  const right = s.dpos[1] === 'r', top = s.dpos[0] === 't', m = R.u * 0.05;
+  const inBar = R.bar > size * 1.6;
+  const capSpace = c.caption.trim() && !top && !inBar ? R.u * 0.085 : 0;
+  const y = inBar ? (top ? R.bar / 2 : R.h - R.bar / 2) : top ? m + size / 2 : R.h - m - size / 2 - capSpace;
+  txt(R, o.text || fmtDate(c.date, s.dfmt), right ? R.w - m : m, y, size, {
+    align: right ? 'right' : 'left', font: R.tpl.font, alpha: a, spacing: size * 0.06,
+    anim: 'fade', local, ...o,
+  });
+}
+
+function titleDefault(R, t, o = {}) {
+  const s = R.s;
+  if (!s.title || t > 4) return;
+  const a = clamp(Math.min(t / 0.6, (4 - t) / 0.8), 0, 1);
+  op(R, 'source-over', 0.3 * a, () => fill(R, '#000'));
+  txt(R, s.title, R.w / 2, R.h / 2, R.u * 0.08, {
+    font: R.tpl.font, anim: R.tpl.textAnim, local: t, alpha: a, spacing: R.u * 0.01, ...o,
+  });
+}
+
+function cardDefault(R, g, local, a, o = {}) {
+  op(R, 'source-over', a, () => fill(R, o.bg || '#000'));
+  const ta = a * clamp(Math.min(local / 0.35, (g.len - local) / 0.35), 0, 1);
+  const k = 1 + 0.07 * (local / g.len);
+  const size = R.u * (g.big ? 0.1 : 0.075);
+  txt(R, g.text, R.w / 2, R.h / 2 - (g.sub ? size * 0.45 : 0), size, {
+    font: o.font || R.tpl.font, alpha: ta, scale: k, spacing: size * 0.08, shadow: false, color: o.color,
+  });
+  if (g.sub) txt(R, g.sub, R.w / 2, R.h / 2 + size * 0.75, size * 0.38, {
+    font: o.font || R.tpl.font, alpha: ta * 0.85, spacing: size * 0.12, shadow: false, color: o.color,
+  });
+}
+
+const BASE = {
+  trans: 'cross', td: 0.7, font: 'sans', textAnim: 'fade',
+  bars: () => 0,
+  grade() {}, hud() {},
+  caption: captionDefault, date: dateDefault, title: titleDefault, card: cardDefault,
+};
+const tpl = (o) => Object.assign({}, BASE, o);
+
+// 紙吹雪（時間から位置を決めるので、プレビューと書き出しで同じ動きになる）
+const CONFETTI = Array.from({ length: 70 }, (_, i) => ({
+  x: Math.random(), sp: 0.12 + Math.random() * 0.18, ph: Math.random(), sw: Math.random() * 6.28,
+  sz: 0.008 + Math.random() * 0.012, rot: Math.random() * 6.28, rs: (Math.random() - 0.5) * 8,
+  col: ['#ff4d6d', '#ffd23f', '#3ec1d3', '#7bd389', '#b388ff', '#ff9f1c'][i % 6],
+}));
+
+// ---------- テンプレート ----------
+const TPL = {
+  natural: tpl({
+    name: 'ナチュラル', desc: '色はそのまま。やさしいフェードとシンプルな文字',
+    trans: 'cross', td: 0.6,
+    caption: (R, c, a, l) => captionDefault(R, c, a, l, { bg: 'rgba(0,0,0,.35)', shadow: false, size: 0.042 }),
+  }),
+
+  cinema: tpl({
+    name: 'シネマ', desc: 'シネスコの黒帯とティール＆オレンジ。映画のワンシーン風',
+    trans: 'cross', td: 1.2, font: 'serif',
+    bars: (R) => letterbox(R, 2.39, 0.1),
+    grade(R) {
+      contrast(R, 0.45);
+      desat(R, 0.15);
+      tint(R, 'soft-light', '#0e6e78', 0.3);
+      tint(R, 'soft-light', '#ff8a3d', 0.18);
+      vignette(R, 0.35);
+      grain(R, 0.06);
+    },
+    caption: (R, c, a, l) => captionDefault(R, c, a, l, { size: 0.04, shadow: false }),
+    date: (R, c, a, l) => dateDefault(R, c, a, l, { size: 0.026, text: fmtDate(c.date, 'en'), shadow: false }),
+    title(R, t) {
+      if (!R.s.title || t > 5) return;
+      const a = clamp(Math.min(t / 1.2, (5 - t) / 1), 0, 1);
+      const size = R.u * 0.07;
+      txt(R, R.s.title, R.w / 2, R.h / 2, size, { font: 'serif', alpha: a, spacing: size * 0.35, weight: 500 });
+      op(R, 'source-over', a * 0.8, (c) => { c.fillStyle = '#fff'; c.fillRect(R.w / 2 - R.u * 0.12 * Math.min(t, 1), R.h / 2 + size, R.u * 0.24 * Math.min(t, 1), Math.max(1, R.u / 400)); });
+    },
+  }),
+
+  film: tpl({
+    name: 'フィルム', desc: '暖かい色と粒子。フィルムカメラで撮ったような質感',
+    trans: 'cross', td: 0.8, font: 'serif',
+    bars: (R) => letterbox(R, 2.2, 0.06),
+    grade(R) {
+      contrast(R, 0.45);
+      desat(R, 0.25);
+      tint(R, 'soft-light', '#ff9a3c', 0.28);
+      grain(R, 0.14);
+      vignette(R, 0.45);
+    },
+  }),
+
+  eightmm: tpl({
+    name: '8mmフィルム', desc: 'セピア・傷・ちらつき。昔のホームムービー',
+    trans: 'black', td: 0.6, font: 'serif', shake: true,
+    grade(R) {
+      desat(R, 1);
+      tint(R, 'color', '#9c7248', 0.55);
+      contrast(R, 0.5);
+      flicker(R, 0.1);
+      grain(R, 0.35);
+      scratches(R);
+      vignette(R, 0.75, 0.25);
+    },
+  }),
+
+  mono: tpl({
+    name: 'モノクロ', desc: '白黒・ハイコントラスト。静かでドラマチック',
+    trans: 'cross', td: 0.9, font: 'serif',
+    grade(R) { desat(R, 1); contrast(R, 0.8); grain(R, 0.1); vignette(R, 0.4); },
+  }),
+
+  vhs: tpl({
+    name: 'VHSホームビデオ', desc: '走査線・にじみ・懐かしい日付表示',
+    trans: 'glitch', td: 0.3, font: 'mono',
+    grade(R) {
+      chroma(R, Math.max(2, R.w / 300));
+      saturate(R, 0.12);
+      tint(R, 'soft-light', '#6fa8ff', 0.2);
+      scanlines(R, 0.25);
+      if (Math.random() < 0.05) glitch(R, 0.4);
+    },
+    date(R, c, a) {
+      const size = R.u * 0.045, m = R.u * 0.06, h = c.date.getHours();
+      const t1 = `${h < 12 ? 'AM' : 'PM'} ${h % 12 || 12}:${pad(c.date.getMinutes())}`;
+      txt(R, t1, m, R.h - m - size * 1.8, size, { align: 'left', font: 'mono', alpha: a, color: '#fffbe6', spacing: size * 0.08 });
+      txt(R, fmtDate(c.date, 'en').replace(' ', '. '), m, R.h - m - size * 0.5, size, { align: 'left', font: 'mono', alpha: a, color: '#fffbe6', spacing: size * 0.08 });
+    },
+    caption: (R, c, a, l) => captionDefault(R, c, a, l, { size: 0.045, color: '#fffbe6' }),
+    hud(R, t) {
+      if (t < 4) txt(R, 'PLAY ▶', R.u * 0.06, R.u * 0.07, R.u * 0.05, { align: 'left', font: 'mono', color: '#fffbe6', alpha: clamp((4 - t) / 0.5, 0, 1) });
+    },
+  }),
+
+  digicam: tpl({
+    name: 'デジカメ日付', desc: '平成のコンデジ風。オレンジの日付スタンプ',
+    trans: 'white', td: 0.3,
+    grade(R) {
+      bloom(R, 0.15);
+      tint(R, 'screen', '#2a2d40', 0.35);
+      tint(R, 'soft-light', '#8fe0cf', 0.15);
+      desat(R, 0.1);
+      grain(R, 0.07);
+    },
+    date(R, c, a) {
+      const size = R.u * 0.05, m = R.u * 0.06;
+      txt(R, fmtDate(c.date, 'digicam'), R.w - m, R.h - m - size * 0.3, size, {
+        align: 'right', font: 'mono', color: '#ffae42', glow: 'rgba(255,110,0,.9)', alpha: a, spacing: size * 0.05,
+      });
+    },
+    caption: (R, c, a, l) => {
+      if (!c.caption.trim()) return;
+      const size = R.u * 0.04;
+      txt(R, c.caption, R.u * 0.06, R.h - R.u * 0.06 - size * 0.3, size, { align: 'left', alpha: a, anim: 'fade', local: l, maxW: R.w * 0.55 });
+    },
+  }),
+
+  rec: tpl({
+    name: 'ビデオカメラREC', desc: 'ファインダーの枠・REC表示・タイムコード',
+    trans: 'cut', td: 0.3, font: 'mono',
+    grade(R) { saturate(R, 0.06); vignette(R, 0.25); grain(R, 0.05); },
+    hud(R, t) {
+      const { w, h, u } = R, c = R.ctx, m = u * 0.06, L = u * 0.08, lw = Math.max(1, u * 0.006);
+      c.save();
+      c.strokeStyle = 'rgba(255,255,255,.9)';
+      c.lineWidth = lw;
+      for (const [x, y, sx, sy] of [[m, m, 1, 1], [w - m, m, -1, 1], [m, h - m, 1, -1], [w - m, h - m, -1, -1]]) {
+        c.beginPath(); c.moveTo(x, y + sy * L); c.lineTo(x, y); c.lineTo(x + sx * L, y); c.stroke();
+      }
+      c.beginPath(); c.moveTo(w / 2 - u * 0.03, h / 2); c.lineTo(w / 2 + u * 0.03, h / 2);
+      c.moveTo(w / 2, h / 2 - u * 0.03); c.lineTo(w / 2, h / 2 + u * 0.03); c.stroke();
+      if (t % 1 < 0.6) { c.fillStyle = '#ff2d2d'; c.beginPath(); c.arc(m + u * 0.05, m + u * 0.06, u * 0.018, 0, 7); c.fill(); }
+      const bx = w - m - u * 0.13, by = m + u * 0.04;
+      c.strokeRect(bx, by, u * 0.07, u * 0.035);
+      c.fillStyle = '#fff';
+      c.fillRect(bx + u * 0.07, by + u * 0.01, u * 0.008, u * 0.015);
+      for (let i = 0; i < 3; i++) c.fillRect(bx + u * (0.006 + i * 0.021), by + u * 0.006, u * 0.017, u * 0.023);
+      c.restore();
+      txt(R, 'REC', m + u * 0.085, m + u * 0.06, u * 0.045, { align: 'left', font: 'mono', shadow: true });
+      const f = Math.floor(t * 30) % 30, sec = Math.floor(t);
+      txt(R, `TC ${pad(Math.floor(sec / 3600))}:${pad(Math.floor(sec / 60) % 60)}:${pad(sec % 60)}:${pad(f)}`, m + u * 0.03, h - m - u * 0.05, u * 0.036, { align: 'left', font: 'mono' });
+    },
+    date(R, c, a) {
+      const u = R.u, m = R.u * 0.06;
+      txt(R, `${fmtDate(c.date, 'en')}  ${fmtDate(c.date, 'time')}`, R.w - m - u * 0.03, R.h - m - u * 0.05, u * 0.036, { align: 'right', font: 'mono', alpha: a });
+    },
+    caption: (R, c, a, l) => {
+      if (!c.caption.trim()) return;
+      txt(R, c.caption, R.w / 2, R.h - R.u * 0.2, R.u * 0.045, { font: 'mono', alpha: a, anim: 'type', local: l });
+    },
+  }),
+
+  polaroid: tpl({
+    name: 'ポラロイド', desc: '白いフチのインスタント写真に手書きのテロップ',
+    trans: 'slide', td: 0.6, font: 'hand', textAnim: 'fade',
+    layout(R, idx) {
+      const { w, h } = R;
+      let cw, ch;
+      if (w >= h) { ch = h * 0.86; cw = ch * 0.84; }
+      else { cw = w * 0.84; ch = cw * 1.2; if (ch > h * 0.8) { ch = h * 0.8; cw = ch / 1.2; } }
+      const m = cw * 0.06, x = (w - cw) / 2, y = (h - ch) / 2;
+      return {
+        card: { x, y, w: cw, h: ch }, photo: { x: x + m, y: y + m, w: cw - 2 * m, h: ch - m - ch * 0.2 },
+        rot: (idx % 2 ? 1 : -1) * 0.035, paper: '#fbfaf5', radius: cw * 0.012,
+      };
+    },
+    back(R, src) { blurBg(R, src, 0.3); },
+    grade(R) { tint(R, 'soft-light', '#ffcf8a', 0.18); desat(R, 0.12); grain(R, 0.05); },
+    decorate(R, c, L, a, local) {
+      const cx = L.card.x + L.card.w / 2, bottom = L.photo.y + L.photo.h, space = L.card.y + L.card.h - bottom;
+      const size = L.card.w * 0.075;
+      if (c.caption.trim()) txt(R, c.caption, cx, bottom + space * 0.45, size, { font: 'hand', color: '#2b2b33', shadow: false, alpha: a, weight: 500, maxW: L.card.w * 0.85 });
+      if (c.showDate) txt(R, fmtDate(c.date, 'dot'), L.card.x + L.card.w - L.card.w * 0.07, bottom + space * (c.caption.trim() ? 0.82 : 0.5), size * 0.5, { align: 'right', font: 'hand', color: '#8a8580', shadow: false, alpha: a, weight: 500 });
+    },
+    caption() {}, date() {},
+  }),
+
+  vlog: tpl({
+    name: 'Vlog', desc: 'パステルの背景に丸いフレーム。ポップなテロップ',
+    trans: 'slide', td: 0.5, font: 'round', textAnim: 'pop',
+    layout(R) {
+      const m = R.u * 0.05;
+      const r = { x: m, y: m, w: R.w - m * 2, h: R.h - m * 2 };
+      return { card: r, photo: r, rot: 0, radius: R.u * 0.05 };
+    },
+    back(R) {
+      fill(R, '#f5e8e0');
+      const c = R.ctx, d = R.u * 0.05;
+      c.fillStyle = 'rgba(230,160,150,.35)';
+      for (let y = d / 2; y < R.h; y += d) for (let x = d / 2 + ((y / d) % 2) * d / 2; x < R.w; x += d) { c.beginPath(); c.arc(x, y, R.u * 0.004, 0, 7); c.fill(); }
+    },
+    grade(R) { tint(R, 'screen', '#fff5ee', 0.12); desat(R, 0.12); tint(R, 'soft-light', '#ffb4a2', 0.12); },
+    caption(R, c, a, l) {
+      if (!c.caption.trim()) return;
+      txt(R, c.caption, R.w / 2, R.h - R.u * 0.13, R.u * 0.048, {
+        font: 'round', color: '#4a3a36', bg: '#fff', bgShadow: true, shadow: false, anim: 'pop', local: l, alpha: a,
+      });
+    },
+    date(R, c, a, l) {
+      const size = R.u * 0.036, x = R.u * 0.17, y = R.u * 0.12;
+      const cc = R.ctx;
+      cc.save();
+      cc.globalAlpha = a * clamp(l / 0.3, 0, 1);
+      cc.translate(x, y); cc.rotate(-0.1);
+      cc.fillStyle = 'rgba(255,214,120,.85)';
+      cc.fillRect(-size * 3, -size * 0.9, size * 6, size * 1.8);
+      cc.restore();
+      txt(R, fmtDate(c.date, 'short'), x, y, size, { font: 'hand', color: '#4a3a36', shadow: false, rot: -0.1, alpha: a * clamp(l / 0.3, 0, 1), weight: 700 });
+    },
+    title(R, t) {
+      if (!R.s.title || t > 3.5) return;
+      const a = clamp((3.5 - t) / 0.5, 0, 1);
+      txt(R, R.s.title, R.w / 2, R.h / 2, R.u * 0.075, { font: 'round', color: '#e0567a', bg: '#fff', bgShadow: true, shadow: false, anim: 'pop', local: t, alpha: a });
+    },
+  }),
+
+  variety: tpl({
+    name: 'バラエティ番組', desc: '太い縁取りのテロップがポンッと出るTV風',
+    trans: 'zoom', td: 0.35, font: 'round', textAnim: 'pop',
+    grade(R) { saturate(R, 0.15); contrast(R, 0.25); },
+    caption(R, c, a, l) {
+      if (!c.caption.trim()) return;
+      const size = R.u * 0.075;
+      txt(R, c.caption, R.w / 2, R.h - R.u * 0.13, size, {
+        font: 'round', weight: 800, color: '#ffe600', strokes: [['#fff', 0.42], ['#111', 0.24]], anim: 'pop', local: l, alpha: a,
+      });
+    },
+    date(R, c, a) {
+      const size = R.u * 0.032, m = R.u * 0.05;
+      txt(R, fmtDate(c.date, 'jpfull'), R.w - m, m + size, size, { align: 'right', font: 'round', color: '#fff', bg: 'rgba(0,120,220,.9)', bgR: size * 0.3, shadow: false, alpha: a, maxW: R.w * 0.5 });
+    },
+    hud(R) {
+      if (!R.s.title) return;
+      const c = R.ctx, size = R.u * 0.04, m = R.u * 0.05;
+      c.save();
+      c.font = `800 ${size}px ${FONTS.round}`;
+      const tw = Math.min(c.measureText(R.s.title).width, R.w * 0.45);
+      c.fillStyle = '#e6002d';
+      c.beginPath();
+      c.moveTo(m, m); c.lineTo(m + tw + size * 1.6, m); c.lineTo(m + tw + size * 1.1, m + size * 1.7); c.lineTo(m - size * 0.5, m + size * 1.7);
+      c.closePath(); c.fill();
+      c.restore();
+      txt(R, R.s.title, m + size * 0.4, m + size * 0.85, size, { align: 'left', font: 'round', weight: 800, shadow: false, maxW: R.w * 0.45 });
+    },
+    title(R, t) {
+      if (!R.s.title || t > 3) return;
+      const a = clamp((3 - t) / 0.4, 0, 1);
+      txt(R, R.s.title, R.w / 2, R.h / 2, R.u * 0.11, { font: 'round', weight: 800, color: '#fff', strokes: [['#ffd400', 0.45], ['#e6002d', 0.25]], anim: 'pop', local: t, alpha: a });
+    },
+  }),
+
+  neon: tpl({
+    name: 'ネオン・グリッチ', desc: 'RGBずれとノイズ、光る文字。パーティー・夜の街に',
+    trans: 'glitch', td: 0.35, font: 'sans', textAnim: 'type',
+    grade(R) {
+      contrast(R, 0.5);
+      tint(R, 'soft-light', '#ff2bd6', 0.18);
+      tint(R, 'soft-light', '#00e5ff', 0.14);
+      chroma(R, Math.max(3, R.w / 180));
+      scanlines(R, 0.12);
+      if (Math.random() < 0.06) glitch(R, 0.6);
+    },
+    caption(R, c, a, l) {
+      if (!c.caption.trim()) return;
+      txt(R, c.caption, R.w / 2, R.h - R.u * 0.12, R.u * 0.06, { color: '#e8fdff', glow: '#00e5ff', anim: 'type', local: l, alpha: a, spacing: R.u * 0.005 });
+    },
+    date: (R, c, a, l) => dateDefault(R, c, a, l, { color: '#ffe6fb', glow: '#ff2bd6', font: 'mono' }),
+    title(R, t) {
+      if (!R.s.title || t > 3.5) return;
+      const a = clamp((3.5 - t) / 0.5, 0, 1);
+      txt(R, R.s.title, R.w / 2, R.h / 2, R.u * 0.09, { color: '#ffe6fb', glow: '#ff2bd6', anim: 'type', local: t, alpha: a, spacing: R.u * 0.01 });
+    },
+  }),
+
+  party: tpl({
+    name: 'お祝い（紙吹雪）', desc: '紙吹雪が舞う明るい仕上がり。誕生日やイベントに',
+    trans: 'zoom', td: 0.45, font: 'round', textAnim: 'pop',
+    grade(R) { saturate(R, 0.12); tint(R, 'soft-light', '#ffd27a', 0.15); bloom(R, 0.08); },
+    hud(R, t) {
+      const c = R.ctx;
+      c.save();
+      for (const p of CONFETTI) {
+        const y = (((t * p.sp + p.ph) % 1.15) - 0.08) * R.h;
+        const x = (p.x + Math.sin(t * 1.5 + p.sw) * 0.03) * R.w;
+        const s = p.sz * R.u * 2;
+        c.save();
+        c.translate(x, y); c.rotate(p.rot + t * p.rs); c.scale(1, Math.abs(Math.sin(t * 3 + p.sw)) + 0.2);
+        c.fillStyle = p.col;
+        c.fillRect(-s / 2, -s / 4, s, s / 2);
+        c.restore();
+      }
+      c.restore();
+    },
+    caption(R, c, a, l) {
+      if (!c.caption.trim()) return;
+      txt(R, c.caption, R.w / 2, R.h - R.u * 0.12, R.u * 0.065, { font: 'round', weight: 800, color: '#fff', strokes: [['#ff4d6d', 0.3]], anim: 'pop', local: l, alpha: a });
+    },
+    title(R, t) {
+      if (!R.s.title || t > 3.5) return;
+      const a = clamp((3.5 - t) / 0.5, 0, 1);
+      txt(R, R.s.title, R.w / 2, R.h / 2, R.u * 0.1, { font: 'round', weight: 800, color: '#ffd23f', strokes: [['#fff', 0.4], ['#ff4d6d', 0.22]], anim: 'pop', local: t, alpha: a });
+    },
+  }),
+
+  travel: tpl({
+    name: 'トラベル', desc: '鮮やかな色とパスポート風スタンプの日付',
+    trans: 'slide', td: 0.45, font: 'sans', textAnim: 'slide',
+    grade(R) { saturate(R, 0.18); contrast(R, 0.3); tint(R, 'soft-light', '#ffb86b', 0.12); vignette(R, 0.2); },
+    caption(R, c, a, l) {
+      if (!c.caption.trim()) return;
+      const size = R.u * 0.05, x = R.u * 0.07, y = R.h - R.u * 0.12;
+      op(R, 'source-over', a * clamp(l / 0.3, 0, 1), (cc) => { cc.fillStyle = '#ffb000'; cc.fillRect(x, y - size * 0.7, R.u * 0.012, size * 1.4); });
+      txt(R, c.caption, x + R.u * 0.03, y, size, { align: 'left', anim: 'slide', local: l, alpha: a, weight: 800 });
+    },
+    date(R, c, a, l) {
+      const u = R.u, r = u * 0.1, cx = R.w - u * 0.06 - r, cy = u * 0.06 + r * 0.7;
+      const k = l < 0.3 ? 1.6 - 0.6 * E.out(l / 0.3) : 1;
+      const cc = R.ctx;
+      cc.save();
+      cc.globalAlpha = a * clamp(l / 0.15, 0, 1) * 0.9;
+      cc.translate(cx, cy); cc.rotate(-0.18); cc.scale(k, k);
+      cc.strokeStyle = '#d7263d';
+      cc.lineWidth = u * 0.006;
+      roundRect(cc, -r, -r * 0.62, r * 2, r * 1.24, r * 0.2); cc.stroke();
+      roundRect(cc, -r * 0.9, -r * 0.52, r * 1.8, r * 1.04, r * 0.15); cc.stroke();
+      cc.restore();
+      const o = { font: 'mono', color: '#d7263d', shadow: false, rot: -0.18, alpha: a * clamp(l / 0.15, 0, 1) * 0.9, weight: 800, scale: k };
+      txt(R, '✈ ARRIVED', cx - Math.sin(-0.18) * r * 0.28, cy - r * 0.28, u * 0.028, o);
+      txt(R, fmtDate(c.date, 'en'), cx + Math.sin(-0.18) * r * 0.18, cy + r * 0.18, u * 0.03, o);
+    },
+  }),
+
+  trailer: tpl({
+    name: '予告編', desc: '黒い文字カードをはさむ映画の予告編風。最後にCOMING SOON',
+    trans: 'zoom', td: 0.3, font: 'serif', noTitle: true,
+    bars: (R) => letterbox(R, 2.39, 0.1),
+    grade(R) { contrast(R, 0.55); desat(R, 0.2); tint(R, 'soft-light', '#1d5c7a', 0.25); vignette(R, 0.4); },
+    cards(items, s) {
+      const phrases = ['ある日、', 'いつもの景色が', '特別な瞬間に変わる', 'その一瞬を', '忘れない', 'そして――'];
+      const first = items[0].clip.date, last = items[items.length - 1].clip.date;
+      const out = [{ kind: 'card', len: 1.8, text: `${first.getFullYear()}年`, sub: 'A TRUE STORY' }];
+      items.forEach((g, i) => {
+        out.push(g);
+        if (i < items.length - 1) out.push({ kind: 'card', len: 1.4, text: g.clip.caption.trim() || phrases[i % phrases.length] });
+      });
+      const range = fmtDate(first, 'dot') === fmtDate(last, 'dot') ? fmtDate(first, 'dot') : `${fmtDate(first, 'dot')} – ${fmtDate(last, 'dot')}`;
+      out.push({ kind: 'card', len: 3.2, big: true, text: s.title || 'MEMORIES', sub: `COMING SOON   ${range}` });
+      return out;
+    },
+    caption() {}, date() {},
+  }),
+
+  silent: tpl({
+    name: 'サイレント映画', desc: '白黒・ちらつき・字幕カード。100年前の映画風',
+    trans: 'black', td: 0.5, font: 'serif', noTitle: true, shake: true,
+    grade(R) {
+      desat(R, 1);
+      tint(R, 'color', '#8a7a60', 0.2);
+      contrast(R, 0.7);
+      flicker(R, 0.14);
+      grain(R, 0.3);
+      scratches(R);
+      vignette(R, 0.85, 0.2);
+    },
+    cards(items, s) {
+      const out = [];
+      if (s.title) out.push({ kind: 'card', len: 2.6, big: true, text: s.title, sub: fmtDate(items[0].clip.date, 'jp') });
+      for (const g of items) {
+        if (g.clip.caption.trim()) out.push({ kind: 'card', len: 2.0, text: g.clip.caption.trim(), sub: g.clip.showDate ? fmtDate(g.clip.date, 'jp') : '' });
+        out.push(g);
+      }
+      out.push({ kind: 'card', len: 2.2, big: true, text: '終', sub: 'THE END' });
+      return out;
+    },
+    card(R, g, local, a) {
+      op(R, 'source-over', a, () => fill(R, '#0b0b0b'));
+      const c = R.ctx, u = R.u, bw = Math.min(R.w, R.h * 1.4) * 0.8, bh = Math.min(R.h * 0.7, bw * 0.62);
+      const x = (R.w - bw) / 2, y = (R.h - bh) / 2;
+      c.save();
+      c.globalAlpha = a;
+      c.strokeStyle = '#e8e2d0';
+      c.lineWidth = u * 0.006; c.strokeRect(x, y, bw, bh);
+      c.lineWidth = u * 0.002; c.strokeRect(x + u * 0.02, y + u * 0.02, bw - u * 0.04, bh - u * 0.04);
+      for (const [px, py] of [[x, y], [x + bw, y], [x, y + bh], [x + bw, y + bh]]) { c.fillStyle = '#e8e2d0'; c.beginPath(); c.arc(px, py, u * 0.012, 0, 7); c.fill(); }
+      c.restore();
+      const size = u * (g.big ? 0.09 : 0.06);
+      txt(R, g.text, R.w / 2, R.h / 2 - (g.sub ? size * 0.4 : 0), size, { font: 'serif', color: '#e8e2d0', shadow: false, alpha: a, maxW: bw * 0.85, spacing: size * 0.1 });
+      if (g.sub) txt(R, g.sub, R.w / 2, R.h / 2 + size * 0.8, size * 0.42, { font: 'serif', color: '#bdb5a0', shadow: false, alpha: a, spacing: size * 0.15 });
+    },
+    caption() {}, date() {},
+  }),
+};
+
+// ---------- 描画パイプライン ----------
+const OVERLAP = new Set(['cross', 'zoom', 'slide', 'glitch']);
+
+function makeR(canvas, s) {
+  if (canvas.width !== s.w || canvas.height !== s.h) { canvas.width = s.w; canvas.height = s.h; }
+  const R = { cv: canvas, ctx: canvas.getContext('2d'), w: s.w, h: s.h, u: Math.min(s.w, s.h), s, tpl: TPL[s.tpl] };
+  R.bar = R.tpl.bars(R);
+  return R;
+}
+
+// 素材1枚（クリップ）を、テンプレートの枠・切り替えの動きに合わせて描く
+function drawMedia(R, src, o) {
+  const [vw, vh] = srcSize(src);
+  if (!vw || !vh) return;
+  const c = R.ctx, t = R.tpl, { w, h } = R;
+  c.save();
+  c.globalAlpha = o.alpha;
+  if (o.scale !== 1 || o.dx) {
+    c.translate(w / 2 + o.dx, h / 2); c.scale(o.scale, o.scale); c.translate(-w / 2, -h / 2);
+  }
+  const jx = t.shake ? (Math.random() - 0.5) * R.u / 240 : 0, jy = t.shake ? (Math.random() - 0.5) * R.u / 180 : 0;
+  if (t.layout) {
+    const L = t.layout(R, o.idx);
+    if (t.back) t.back(R, src);
+    const cx = L.card.x + L.card.w / 2, cy = L.card.y + L.card.h / 2;
+    c.translate(cx, cy); c.rotate(L.rot); c.translate(-cx, -cy);
+    if (L.paper) {
+      c.save();
+      c.shadowColor = 'rgba(0,0,0,.45)'; c.shadowBlur = R.u * 0.04; c.shadowOffsetY = R.u * 0.012;
+      c.fillStyle = L.paper;
+      roundRect(c, L.card.x, L.card.y, L.card.w, L.card.h, L.radius); c.fill();
+      c.restore();
+    }
+    const p = L.photo;
+    c.save();
+    roundRect(c, p.x, p.y, p.w, p.h, L.paper ? 1 : L.radius); c.clip();
+    const k = Math.max(p.w / vw, p.h / vh);
+    c.drawImage(src, p.x + (p.w - vw * k) / 2 + jx, p.y + (p.h - vh * k) / 2 + jy, vw * k, vh * k);
+    c.restore();
+    if (t.decorate && o.clip) t.decorate(R, o.clip, L, o.alpha, o.local);
+  } else {
+    const fit = R.s.fit;
+    if (fit === 'blur' && Math.abs(vw / vh - w / h) > 0.05) blurBg(R, src);
+    const k = fit === 'cover' ? Math.max(w / vw, h / vh) : Math.min(w / vw, h / vh);
+    c.drawImage(src, (w - vw * k) / 2 + jx, (h - vh * k) / 2 + jy, vw * k, vh * k);
+  }
+  c.restore();
+}
+
+// 各アイテムの「入り」と「抜け」の進み具合（0〜1）
+function phases(g, local, s) {
+  let pin = 1, pout = 1;
+  if (OVERLAP.has(s.trans)) {
+    if (g.overlap) pin = clamp(local / g.overlap, 0, 1);
+    if (g.nextOverlap) pout = clamp((g.len - local) / g.nextOverlap, 0, 1);
+  } else if (s.trans === 'black' || s.trans === 'white') {
+    const f = Math.min(s.td / 2, g.len / 3);
+    if (g.i > 0) pin = clamp(local / f, 0, 1);
+    if (!g.last) pout = clamp((g.len - local) / f, 0, 1);
+  }
+  return { pin, pout, vis: Math.min(pin, pout) };
+}
+
+function transformFor(s, ph) {
+  const o = { alpha: 1, scale: 1, dx: 0 };
+  switch (s.trans) {
+    case 'cross': case 'glitch': o.alpha = ph.pin; break;
+    case 'zoom': o.alpha = ph.pin; o.scale = 1 + 0.3 * (1 - E.out(ph.pin)) + 0.3 * (1 - E.out(ph.pout)); break;
+    case 'slide': o.dx = (1 - E.inOut(ph.pin)) - (1 - E.inOut(ph.pout)); break;
+  }
+  return o;
+}
+
+// active: [{ g, src, local }]
+function renderFrame(R, active, frameT, total) {
+  const { ctx: c, s, tpl: t } = R;
+  c.globalAlpha = 1;
+  c.globalCompositeOperation = 'source-over';
+  c.fillStyle = '#000';
+  c.fillRect(0, 0, R.w, R.h);
+
+  for (const a of active) {
+    a.ph = phases(a.g, a.local, s);
+    const tr = transformFor(s, a.ph);
+    tr.dx *= R.w;
+    if (a.g.kind === 'card') {
+      c.save();
+      if (tr.scale !== 1 || tr.dx) { c.translate(R.w / 2 + tr.dx, R.h / 2); c.scale(tr.scale, tr.scale); c.translate(-R.w / 2, -R.h / 2); }
+      t.card(R, a.g, a.local, tr.alpha);
+      c.restore();
+    } else {
+      drawMedia(R, a.src, { ...tr, idx: a.g.idx, clip: a.g.clip, local: a.local });
+    }
+  }
+
+  t.grade(R, frameT);
+  if (R.bar) { c.fillStyle = '#000'; c.fillRect(0, 0, R.w, R.bar); c.fillRect(0, R.h - R.bar, R.w, R.bar); }
+
+  for (const a of active) {
+    if (a.g.kind !== 'clip') continue;
+    const vis = s.trans === 'slide' ? 1 : a.ph.vis;
+    t.caption(R, a.g.clip, vis, a.local);
+    if (a.g.clip.showDate) t.date(R, a.g.clip, vis, a.local);
+  }
+
+  if (s.trans === 'black' || s.trans === 'white') {
+    const vis = active.length ? Math.max(...active.map(a => a.ph.vis)) : 0;
+    if (vis < 1) op(R, 'source-over', 1 - vis, () => fill(R, s.trans === 'white' ? '#fff' : '#000'));
+  }
+  if (s.trans === 'glitch') {
+    const k = active.length > 1 ? 1 : Math.max(0, ...active.map(a => 1 - a.ph.vis));
+    if (k > 0.02) { glitch(R, k); if (k > 0.3) chroma(R, R.w / 60 * k); }
+  }
+
+  t.hud(R, frameT, active);
+  if (!t.noTitle) t.title(R, frameT);
+
+  if (total) {
+    const edge = clamp(Math.min(frameT / 0.4, (total - frameT) / 1), 0, 1);
+    if (edge < 1) op(R, 'source-over', 1 - edge, () => fill(R, '#000'));
+  }
+}
+
+// ---------- 設定・タイムライン ----------
+function settings(overrideTpl) {
+  const id = overrideTpl || tplId;
+  const t = TPL[id];
+  let aspect = $('aspect').value;
+  if (aspect === 'auto') {
+    const used = clips.filter(c => c.include);
+    const portrait = used.filter(c => c.h > c.w).length;
+    aspect = !used.length || portrait * 2 >= used.length ? '9:16' : '16:9';
+  }
+  const [aw, ah] = aspect.split(':').map(Number);
+  const scale = Number($('height').value) / Math.min(aw, ah);
+  return {
+    tpl: id,
+    w: Math.round(aw * scale / 2) * 2, h: Math.round(ah * scale / 2) * 2,
+    trans: $('trans').value === 'auto' ? t.trans : $('trans').value,
+    td: $('td').value === 'auto' ? t.td : Number($('td').value),
+    fit: $('fit').value, title: $('title').value.trim(), dfmt: $('dfmt').value, dpos: $('dpos').value,
+    bgmVol: +$('bgmVol').value, origVol: +$('origVol').value,
+  };
+}
+
+function timeline() {
+  const s = settings();
+  const t = TPL[s.tpl];
+  let items = clips.filter(c => c.include && c.out - c.in > 0.2)
+    .map((c, idx) => ({ kind: 'clip', clip: c, len: c.out - c.in, idx }));
+  if (items.length && t.cards) items = t.cards(items, s);
+  let time = 0;
+  items.forEach((g, i) => {
+    let overlap = 0;
+    if (i > 0 && OVERLAP.has(s.trans)) overlap = Math.min(s.td, g.len / 2, items[i - 1].len / 2);
+    time -= overlap;
+    Object.assign(g, { start: time, overlap, i, last: i === items.length - 1 });
+    time += g.len;
+  });
+  items.forEach((g, i) => { g.nextOverlap = items[i + 1] ? items[i + 1].overlap : 0; });
+  return { segs: items, total: time, s };
+}
+
+// ---------- 画面：タブ ----------
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(el => { el.hidden = el.dataset.tab !== name; });
+  document.querySelectorAll('nav.tabbar button').forEach(b => b.classList.toggle('on', b.dataset.go === name));
+  if (name === 'tpl') renderGallery();
+  if (name === 'edit') renderStrip();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('nav.tabbar button').forEach(b => b.onclick = () => showTab(b.dataset.go));
+
+// ---------- 素材の追加 ----------
+$('addBtn').onclick = () => $('files').click();
+$('files').onchange = async (e) => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  for (const [i, f] of files.entries()) {
+    setStatus(`読み込み中 ${i + 1} / ${files.length}：${f.name}`);
+    try {
+      clips.push(await loadClip(f));
+    } catch {
+      alert(`${f.name} を読み込めませんでした。`);
+    }
+    renderList();
+  }
+  if (!selClip() && clips.length) select(clips[0].id);
+  refresh();
+};
+
+async function loadClip(file) {
+  const url = URL.createObjectURL(file);
+  const v = hiddenVideo(url);
+  try {
+    if (v.readyState < 1) await once(v, 'loadedmetadata');
+    await primeVideo(v);
+    const duration = v.duration;
+    if (!isFinite(duration) || duration <= 0) throw new Error('duration');
+    await seekTo(v, Math.min(0.5, duration / 2));
+    const frame = document.createElement('canvas');
+    frame.width = 360;
+    frame.height = Math.round(360 * v.videoHeight / v.videoWidth) || 202;
+    frame.getContext('2d').drawImage(v, 0, 0, frame.width, frame.height);
+    const meta = await readCreationDate(file).catch(() => null);
+    return {
+      id: nextId++, name: file.name, url, duration, w: v.videoWidth, h: v.videoHeight,
+      date: meta ? meta.date : new Date(file.lastModified),
+      dateSource: meta ? meta.source : 'ファイルの日時（撮影日と違う場合は直してください）',
+      caption: '', showDate: true, mute: false, include: true,
+      in: 0, out: duration, frame, thumb: frame.toDataURL('image/jpeg', 0.7), scores: null, step: 0,
+    };
+  } catch (err) {
+    URL.revokeObjectURL(url);
+    throw err;
+  } finally {
+    v.remove();
+  }
+}
+
+$('sortBtn').onclick = () => { clips.sort((a, b) => a.date - b.date); renderList(); refresh(); };
+
+function renderList() {
+  const list = $('list');
+  list.innerHTML = '';
+  clips.forEach((c, i) => {
+    const el = document.createElement('div');
+    el.className = 'item' + (c.id === selId ? ' sel' : '') + (c.include ? '' : ' off');
+    el.innerHTML = `
+      <input type="checkbox" title="使う" ${c.include ? 'checked' : ''}>
+      <img src="${c.thumb}" alt="">
+      <div class="meta"><b></b><span>${fmtDate(c.date, 'dothm')}<br>${fmtT(c.out - c.in)} / ${fmtT(c.duration)}</span></div>
+      <div class="ops"><button data-op="up" title="上へ">↑</button><button data-op="down" title="下へ">↓</button><button data-op="del" title="削除">×</button></div>`;
+    el.querySelector('b').textContent = c.caption || c.name;
+    el.querySelector('img').onclick = el.querySelector('.meta').onclick = () => { select(c.id); showTab('edit'); };
+    const cb = el.querySelector('input');
+    cb.onchange = () => { c.include = cb.checked; renderList(); refresh(); };
+    el.querySelectorAll('button').forEach(b => b.onclick = () => {
+      const op = b.dataset.op;
+      if (op === 'up' && i > 0) [clips[i - 1], clips[i]] = [clips[i], clips[i - 1]];
+      if (op === 'down' && i < clips.length - 1) [clips[i + 1], clips[i]] = [clips[i], clips[i + 1]];
+      if (op === 'del') {
+        URL.revokeObjectURL(c.url);
+        clips.splice(i, 1);
+        if (selId === c.id) select(clips[0] ? clips[0].id : null);
+      }
+      renderList();
+      refresh();
+    });
+    list.appendChild(el);
+  });
+}
+
+// ---------- クリップの編集 ----------
+const selClip = () => clips.find(c => c.id === selId) || null;
+
+function renderStrip() {
+  const strip = $('strip');
+  strip.innerHTML = '';
+  clips.forEach(c => {
+    const img = document.createElement('img');
+    img.src = c.thumb;
+    img.className = c.id === selId ? 'sel' : '';
+    img.onclick = () => select(c.id);
+    strip.appendChild(img);
+  });
+}
+
+function select(id) {
+  selId = id;
+  const c = selClip();
+  $('editBody').hidden = !c;
+  $('editEmpty').hidden = !!c;
+  renderList();
+  renderStrip();
+  if (!c) { ev.removeAttribute('src'); ev.load(); drawStill(); return; }
+  if (ev.src !== c.url) {
+    ev.src = c.url;
+    ev.addEventListener('loadedmetadata', () => { ev.currentTime = c.in; }, { once: true });
+  } else {
+    ev.currentTime = c.in;
+  }
+  $('inR').max = $('outR').max = c.duration;
+  $('cap').value = c.caption;
+  $('dt').value = `${c.date.getFullYear()}-${pad(c.date.getMonth() + 1)}-${pad(c.date.getDate())}T${pad(c.date.getHours())}:${pad(c.date.getMinutes())}`;
+  $('dtSrc').textContent = `読み取り元：${c.dateSource}`;
+  $('showDate').checked = c.showDate;
+  $('mute').checked = c.mute;
+  syncTrim();
+  drawStill();
+}
+
+function syncTrim() {
+  const c = selClip();
+  if (!c) return;
+  $('inR').value = c.in;
+  $('outR').value = c.out;
+  $('inO').textContent = fmtT(c.in);
+  $('outO').textContent = fmtT(c.out);
+  $('segLen').textContent = `使う長さ ${fmtT(c.out - c.in)}（全体 ${fmtT(c.duration)}）`;
+}
+
+$('inR').oninput = () => { const c = selClip(); c.in = Math.min(+$('inR').value, c.out - 0.3); ev.currentTime = c.in; syncTrim(); };
+$('outR').oninput = () => { const c = selClip(); c.out = Math.max(+$('outR').value, c.in + 0.3); ev.currentTime = c.out; syncTrim(); };
+$('inR').onchange = $('outR').onchange = () => { renderList(); refresh(); };
+$('setIn').onclick = () => { const c = selClip(); c.in = Math.min(ev.currentTime, c.out - 0.3); syncTrim(); renderList(); refresh(); };
+$('setOut').onclick = () => { const c = selClip(); c.out = Math.max(ev.currentTime, c.in + 0.3); syncTrim(); renderList(); refresh(); };
+$('playSeg').onclick = () => { const c = selClip(); ev.currentTime = c.in; ev.play(); };
+ev.addEventListener('timeupdate', () => {
+  const c = selClip();
+  if (c && !ev.paused && ev.currentTime >= c.out) ev.pause();
+  drawStill();
+});
+ev.addEventListener('seeked', drawStill);
+ev.addEventListener('loadeddata', drawStill);
+$('cap').oninput = () => { selClip().caption = $('cap').value; drawStill(); };
+$('cap').onchange = () => { renderList(); refresh(); };
+$('dt').onchange = () => {
+  const c = selClip();
+  const d = new Date($('dt').value);
+  if (!isNaN(d)) { c.date = d; c.dateSource = '手入力'; $('dtSrc').textContent = '読み取り元：手入力'; }
+  renderList();
+  drawStill();
+};
+$('showDate').onchange = () => { selClip().showDate = $('showDate').checked; drawStill(); };
+$('mute').onchange = () => { selClip().mute = $('mute').checked; };
+
+// ---------- おまかせ編集（動きの多い場面を探す） ----------
+async function analyze(c, onProgress) {
+  if (c.scores) return;
+  const v = hiddenVideo(c.url);
+  try {
+    if (v.readyState < 1) await once(v, 'loadedmetadata');
+    await primeVideo(v);
+    const step = Math.max(0.25, c.duration / 100);
+    const W = 48, H = 27;
+    const ac = document.createElement('canvas');
+    ac.width = W; ac.height = H;
+    const ax = ac.getContext('2d', { willReadFrequently: true });
+    let prev = null;
+    const scores = [];
+    for (let t = 0; t < c.duration; t += step) {
+      await seekTo(v, t);
+      ax.drawImage(v, 0, 0, W, H);
+      const d = ax.getImageData(0, 0, W, H).data;
+      const cur = new Float32Array(W * H);
+      let diff = 0, lum = 0;
+      for (let k = 0, p = 0; k < cur.length; k++, p += 4) {
+        cur[k] = (d[p] * 3 + d[p + 1] * 6 + d[p + 2]) / 10;
+        lum += cur[k];
+        if (prev) diff += Math.abs(cur[k] - prev[k]);
+      }
+      const dark = lum / cur.length < 25 ? 0.3 : 1; // 真っ暗な場面は避ける
+      scores.push(prev ? (diff / cur.length) * dark : 0);
+      prev = cur;
+      onProgress(Math.min(t / c.duration, 1));
+    }
+    // 手ブレのような極端な動きに引っ張られないよう上限をかける。撮り始め・撮り終わりは弱める
+    const sorted = [...scores].sort((a, b) => a - b);
+    const cap = sorted[Math.floor(sorted.length * 0.9)] || 1;
+    c.scores = scores.map((sc, i) => {
+      const t = i * step;
+      const edge = (t < 0.7 || t > c.duration - 0.7) ? 0.5 : 1;
+      return Math.min(sc, cap) * edge + 0.01;
+    });
+    c.step = step;
+  } finally {
+    v.remove();
+  }
+}
+
+function pickWindow(c, len) {
+  if (len >= c.duration - 0.1) { c.in = 0; c.out = c.duration; return; }
+  const n = Math.max(1, Math.round(len / c.step));
+  let best = 0, bestAt = 0, sum = 0;
+  for (let i = 0; i < c.scores.length; i++) {
+    sum += c.scores[i];
+    if (i >= n) sum -= c.scores[i - n];
+    if (i >= n - 1 && sum > best) { best = sum; bestAt = i - n + 1; }
+  }
+  c.in = clamp(bestAt * c.step, 0, c.duration - len);
+  c.out = c.in + len;
+}
+
+$('autoBtn').onclick = async () => {
+  const used = clips.filter(c => c.include);
+  if (!used.length) return;
+  $('autoBtn').disabled = true;
+  try {
+    const s = settings();
+    const target = +$('target').value + (OVERLAP.has(s.trans) ? (used.length - 1) * s.td : 0);
+    const totalDur = used.reduce((a, c) => a + c.duration, 0);
+    for (const [i, c] of used.entries()) {
+      await analyze(c, (p) => setStatus(`見どころを探しています ${i + 1} / ${used.length}（${Math.round(p * 100)}%）`));
+      pickWindow(c, clamp(target * c.duration / totalDur, Math.min(2, c.duration), c.duration));
+    }
+    syncTrim();
+    renderList();
+    refresh();
+  } finally {
+    $('autoBtn').disabled = false;
+  }
+};
+
+$('resetBtn').onclick = () => {
+  clips.forEach(c => { c.in = 0; c.out = c.duration; });
+  syncTrim();
+  renderList();
+  refresh();
+};
+
+// ---------- テンプレート一覧 ----------
+let demoCache = {};
+function demoSource(portrait) {
+  const key = portrait ? 'p' : 'l';
+  if (demoCache[key]) return demoCache[key];
+  const c = document.createElement('canvas');
+  c.width = portrait ? 360 : 640; c.height = portrait ? 640 : 360;
+  const x = c.getContext('2d');
+  const sky = x.createLinearGradient(0, 0, 0, c.height);
+  sky.addColorStop(0, '#2f5d8a'); sky.addColorStop(0.55, '#f2a65a'); sky.addColorStop(0.62, '#f6c28b');
+  x.fillStyle = sky; x.fillRect(0, 0, c.width, c.height);
+  x.fillStyle = '#ffe7b3'; x.beginPath(); x.arc(c.width * 0.62, c.height * 0.56, c.width * 0.07, 0, 7); x.fill();
+  x.fillStyle = '#2d4a3e';
+  x.beginPath(); x.moveTo(0, c.height * 0.62);
+  for (let i = 0; i <= 10; i++) x.lineTo(c.width * i / 10, c.height * (0.6 + Math.sin(i * 1.3) * 0.04));
+  x.lineTo(c.width, c.height); x.lineTo(0, c.height); x.fill();
+  x.fillStyle = '#1e3329'; x.fillRect(0, c.height * 0.78, c.width, c.height * 0.22);
+  return (demoCache[key] = c);
+}
+
+function sampleClip() {
+  const c = selClip() || clips.find(k => k.include);
+  return {
+    src: c ? c.frame : demoSource(settings().h > settings().w),
+    clip: { caption: (c && c.caption) || 'テロップ', date: c ? c.date : new Date(), showDate: true },
+  };
+}
+
+function renderGallery() {
+  const g = $('gallery');
+  if (!g.children.length) {
+    for (const [id, t] of Object.entries(TPL)) {
+      const b = document.createElement('button');
+      b.className = 'tpl';
+      b.dataset.id = id;
+      b.innerHTML = `<canvas></canvas><div><b>${t.name}</b><span>${t.desc}</span></div>`;
+      b.onclick = () => {
+        tplId = id;
+        try { localStorage.setItem('clip.tpl', id); } catch {}
+        g.querySelectorAll('.tpl').forEach(el => el.classList.toggle('sel', el.dataset.id === id));
+        refresh();
+      };
+      g.appendChild(b);
+    }
+  }
+  const smp = sampleClip();
+  g.querySelectorAll('.tpl').forEach(b => {
+    const id = b.dataset.id;
+    b.classList.toggle('sel', id === tplId);
+    const s = settings(id);
+    const k = 200 / Math.max(s.w, s.h);
+    const small = { ...s, w: Math.round(s.w * k), h: Math.round(s.h * k), title: '' };
+    const R = makeR(b.querySelector('canvas'), small);
+    const t = TPL[id];
+    const g0 = { kind: 'clip', clip: smp.clip, idx: 0, i: 0, len: 5, overlap: 0, nextOverlap: 0, last: true };
+    if (t.cards && !t.layout && (id === 'trailer' || id === 'silent')) {
+      // 文字カードのあるテンプレートは、映像と文字カードの両方の雰囲気がわかるよう左右で見せる
+      renderFrame(R, [{ g: g0, src: smp.src, local: 1.2 }], 1.2, 0);
+      const half = document.createElement('canvas');
+      const R2 = makeR(half, small);
+      renderFrame(R2, [{ g: { kind: 'card', len: 3, text: id === 'trailer' ? 'いつもの景色が' : smp.clip.caption, sub: id === 'silent' ? fmtDate(smp.clip.date, 'jp') : '', i: 0, overlap: 0, nextOverlap: 0, last: true }, local: 1.2 }], 1.2, 0);
+      R.ctx.drawImage(half, R.w / 2, 0, R.w / 2, R.h, R.w / 2, 0, R.w / 2, R.h);
+    } else {
+      renderFrame(R, [{ g: g0, src: smp.src, local: 1.2 }], 1.2, 0);
+    }
+  });
+}
+
+// ---------- プレビュー（停止中） ----------
+function drawStill() {
+  if (running) return;
+  const s = settings();
+  const R = makeR(cv, s);
+  const c = selClip();
+  const src = c && ev.readyState >= 2 ? ev : c ? c.frame : null;
+  if (c && src) {
+    const segs = timeline().segs;
+    const g = segs.find(x => x.kind === 'clip' && x.clip === c) || { kind: 'clip', clip: c, idx: 0, i: 0, len: 5, overlap: 0, nextOverlap: 0, last: true };
+    const g0 = { ...g, overlap: 0, nextOverlap: 0, i: 0, last: true };
+    const isFirst = segs[0] && segs[0].clip === c;
+    renderFrame(R, [{ g: g0, src, local: 1.2 }], isFirst ? 1.5 : 10, 0);
+  } else {
+    R.ctx.fillStyle = '#000';
+    R.ctx.fillRect(0, 0, R.w, R.h);
+    renderFrame(R, [{ g: { kind: 'clip', clip: { caption: '', date: new Date(), showDate: false }, idx: 0, i: 0, len: 5, overlap: 0, nextOverlap: 0, last: true }, src: demoSource(s.h > s.w), local: 1.2 }], 10, 0);
+    txt(R, '＋ 動画を追加してはじめる', R.w / 2, R.h / 2, R.u * 0.055, { font: 'sans' });
+  }
+}
+
+function refresh() {
+  const { segs, total } = timeline();
+  const any = clips.length > 0;
+  $('sortBtn').disabled = $('autoBtn').disabled = $('resetBtn').disabled = !any || !!running;
+  $('play').disabled = $('rec').disabled = !segs.length || !!running;
+  if (!running) setStatus(segs.length ? `${TPL[tplId].name} ・ ${clips.filter(c => c.include).length}クリップ ・ ${fmtT(total)}` : '動画を追加してください');
+  drawStill();
+  if (!document.querySelector('[data-tab="tpl"]').hidden) renderGallery();
+}
+
+['trans', 'td', 'aspect', 'height', 'fit', 'dfmt', 'dpos'].forEach(id => $(id).addEventListener('change', refresh));
+$('title').addEventListener('input', () => drawStill());
+$('title').addEventListener('change', refresh);
+
+// ---------- 再生・書き出し ----------
+let audioCtx = null, master = null, recDest = null, bgmEl = null, bgmGain = null;
+const players = [];
+
+function ensureAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  master = audioCtx.createGain();
+  master.connect(audioCtx.destination);
+  recDest = audioCtx.createMediaStreamDestination();
+  master.connect(recDest);
+  for (let i = 0; i < 3; i++) {
+    const v = document.createElement('video');
+    v.playsInline = true;
+    v.setAttribute('playsinline', '');
+    v.preload = 'auto';
+    $('hidden').appendChild(v);
+    const gain = audioCtx.createGain();
+    gain.gain.value = 0;
+    audioCtx.createMediaElementSource(v).connect(gain).connect(master);
+    players.push({ v, gain, seg: null, ready: false, token: 0 });
+  }
+  bgmEl = new Audio();
+  $('hidden').appendChild(bgmEl);
+  bgmGain = audioCtx.createGain();
+  audioCtx.createMediaElementSource(bgmEl).connect(bgmGain).connect(master);
+}
+
+async function prepare(p, g) {
+  const token = ++p.token;
+  p.seg = g;
+  p.ready = false;
+  g.player = p;
+  if (p.v.src !== g.clip.url) p.v.src = g.clip.url;
+  if (p.v.readyState < 1) await once(p.v, 'loadedmetadata').catch(() => {});
+  await seekTo(p.v, g.clip.in);
+  if (p.token === token) p.ready = true;
+}
+
+function release(p) {
+  p.token++;
+  p.v.pause();
+  p.gain.gain.value = 0;
+  if (p.seg) p.seg.player = null;
+  p.seg = null;
+  p.ready = false;
+}
+
+$('bgm').onchange = (e) => {
+  bgmFiles = [...e.target.files];
+  $('bgmList').textContent = bgmFiles.map((f, i) => `${i + 1}. ${f.name}`).join('\n');
+};
+
+function pickMime() {
+  const candidates = [
+    'video/mp4;codecs=avc1.640028,mp4a.40.2',
+    'video/mp4',
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+  ];
+  return candidates.find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || '';
+}
+
+function run({ record }) {
+  const { segs, total, s } = timeline();
+  if (!segs.length || running) return;
+  ev.pause();
+
+  // ↓ iPhoneは「タップの直後」でないと音付きの再生を許可しないので、await より前に準備しておく
+  ensureAudio();
+  audioCtx.resume();
+  const clipSegs = segs.filter(g => g.kind === 'clip');
+  players.forEach((p, i) => {
+    if (clipSegs[i] && p.v.src !== clipSegs[i].clip.url) p.v.src = clipSegs[i].clip.url;
+    p.v.play().catch(() => {});
+    p.v.pause();
+  });
+  let bgmIdx = 0;
+  const bgmUrls = bgmFiles.map(f => URL.createObjectURL(f));
+  if (bgmUrls.length) {
+    bgmEl.src = bgmUrls[0];
+    bgmEl.play().catch(() => {});
+    bgmEl.pause();
+    bgmEl.onended = () => { bgmIdx = (bgmIdx + 1) % bgmUrls.length; bgmEl.src = bgmUrls[bgmIdx]; bgmEl.play(); };
+  }
+
+  let mime = '';
+  if (record) {
+    mime = pickMime();
+    if (!mime) { alert('このブラウザは動画の書き出しに対応していません'); return; }
+  }
+
+  let wakeLock = null;
+  if (navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { wakeLock = l; }).catch(() => {});
+
+  running = { raf: 0, stop: null, record };
+  $('result').innerHTML = '';
+  refresh();
+  $('stop').disabled = false;
+  setStatus('準備中…');
+  segs.forEach(g => { g.player = null; g.started = false; g.done = false; });
+  players.forEach(release);
+
+  (async () => {
+    if (clipSegs[0]) await prepare(players[0], clipSegs[0]);
+    if (!running) return;
+
+    let recorder = null, chunks = [];
+    if (record) {
+      const stream = cv.captureStream(FPS);
+      recDest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
+      recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: s.h >= 1080 ? 10e6 : 5e6 });
+      recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    }
+
+    const now = audioCtx.currentTime;
+    const fadeOut = Math.min(2, total / 4);
+    bgmGain.gain.cancelScheduledValues(now);
+    bgmGain.gain.setValueAtTime(s.bgmVol, now);
+    bgmGain.gain.setValueAtTime(s.bgmVol, now + total - fadeOut);
+    bgmGain.gain.linearRampToValueAtTime(0, now + total);
+    if (bgmUrls.length) bgmEl.play().catch(() => {});
+    if (recorder) recorder.start(1000);
+    const t0 = performance.now();
+    const R = makeR(cv, s);
+
+    let stopped = false;
+    const finish = (reason) => {
+      if (stopped) return;
+      stopped = true;
+      cancelAnimationFrame(running.raf);
+      document.removeEventListener('visibilitychange', onHide);
+      players.forEach(release);
+      bgmEl.pause();
+      bgmEl.onended = null;
+      bgmUrls.forEach(u => URL.revokeObjectURL(u));
+      if (wakeLock) wakeLock.release().catch(() => {});
+      const done = () => { running = null; $('stop').disabled = true; refresh(); };
+      if (!recorder) { done(); setStatus('プレビュー終了'); return; }
+      if (reason === 'hidden') {
+        recorder.onstop = () => { done(); setStatus('画面が切り替わったため、書き出しを中止しました。もう一度お試しください'); };
+        recorder.stop();
+        return;
+      }
+      recorder.onstop = () => {
+        const ext = mime.startsWith('video/mp4') ? 'mp4' : 'webm';
+        const blob = new Blob(chunks, { type: mime.split(';')[0] });
+        const first = clipSegs[0].clip.date;
+        const name = `${first.getFullYear()}${pad(first.getMonth() + 1)}${pad(first.getDate())}_${(s.title || TPL[s.tpl].name).replace(/[\\/:*?"<>|\s（）()]+/g, '_')}.${ext}`;
+        const file = new File([blob], name, { type: blob.type });
+        const box = $('result');
+        box.innerHTML = '';
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          const b = document.createElement('button');
+          b.className = 'btn primary big';
+          b.textContent = '写真に保存 / 共有';
+          b.onclick = () => navigator.share({ files: [file] }).catch(() => {});
+          box.appendChild(b);
+        }
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        a.textContent = `⬇ ${name}（${(blob.size / 1e6).toFixed(1)} MB）をダウンロード`;
+        box.appendChild(a);
+        if (!box.querySelector('button') && /iPhone|iPad/.test(navigator.userAgent)) {
+          const p = document.createElement('p');
+          p.className = 'hint';
+          p.textContent = '保存先は「ファイル」アプリ > ダウンロード です。写真アプリに入れるには、動画を開いて共有 >「ビデオを保存」。';
+          box.appendChild(p);
+        }
+        done();
+        setStatus(ext === 'webm' ? '完了（WebM形式）' : '完了しました');
+        showTab('out');
+      };
+      recorder.stop();
+    };
+    const onHide = () => { if (document.hidden && recorder) finish('hidden'); };
+    document.addEventListener('visibilitychange', onHide);
+    running.stop = finish;
+
+    const tick = () => {
+      const t = (performance.now() - t0) / 1000;
+      const frameT = Math.min(t, total);
+
+      for (const g of segs) {
+        if (g.done) continue;
+        const local = t - g.start;
+        if (g.kind === 'card') {
+          if (local >= g.len) g.done = true;
+          else if (local >= 0) g.started = true;
+          continue;
+        }
+        if (!g.player && local > -1.5) {
+          const p = players.find(p => !p.seg);
+          if (p) prepare(p, g);
+        }
+        const p = g.player;
+        if (!p) continue;
+        if (local >= g.len) { g.done = true; release(p); continue; }
+        if (local >= 0 && p.ready && !g.started) { g.started = true; p.v.play().catch(() => {}); }
+        if (g.started && p.v.currentTime >= g.clip.out) p.v.pause();
+      }
+
+      const active = [];
+      for (const g of segs) {
+        if (!g.started || g.done) continue;
+        if (g.kind === 'clip' && !(g.player && g.player.ready)) continue;
+        active.push({ g, src: g.player ? g.player.v : null, local: frameT - g.start });
+      }
+      renderFrame(R, active, frameT, total);
+      for (const a of active) {
+        if (a.g.kind === 'clip') a.g.player.gain.gain.value = a.g.clip.mute ? 0 : s.origVol * a.ph.vis;
+      }
+
+      $('prog').value = frameT / total;
+      setStatus(`${record ? '書き出し中' : '再生中'} ${fmtT(frameT)} / ${fmtT(total)}`);
+      if (t >= total) return finish();
+      running.raf = requestAnimationFrame(tick);
+    };
+    running.raf = requestAnimationFrame(tick);
+  })().catch((err) => {
+    console.error(err);
+    setStatus(`エラー：${err.message}`);
+    running = null;
+    refresh();
+  });
+}
+
+$('play').onclick = () => run({ record: false });
+$('rec').onclick = () => { window.scrollTo(0, 0); run({ record: true }); };
+$('stop').onclick = () => {
+  if (!running) return;
+  if (running.stop) running.stop();
+  else { running = null; players.forEach(release); refresh(); }
+};
+
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+select(null);
+refresh();
+</script>
+</body>
+</html>
