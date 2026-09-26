@@ -1,6 +1,6 @@
 // オフラインでも起動できるよう、アプリ本体をキャッシュする。
 // index.html はネット優先（更新がすぐ届く）、つながらない時はキャッシュを使う。
-const CACHE = 'clip-no-kouro-v3';
+const CACHE = 'clip-no-kouro-v4';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {

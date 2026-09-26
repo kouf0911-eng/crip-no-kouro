@@ -100,7 +100,7 @@
   nav.tabbar button.busy i::after { content: '●'; color: var(--accent); font-size: 10px; vertical-align: top; margin-left: 2px; }
 
   /* テンプレート */
-  #gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+  #gallery, .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
   .tpl { border: 2px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); cursor: pointer; text-align: left; padding: 0; color: inherit; font: inherit; }
   .tpl.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
   .tpl canvas { display: block; width: 100%; background: #000; }
@@ -112,6 +112,42 @@
   #result a { color: var(--accent); font-weight: 600; }
   #bgmList { font-size: 12px; color: var(--muted); margin: -4px 0 10px; white-space: pre-line; }
 
+  /* かんたんモード */
+  body.easy main, body.easy nav.tabbar, body.easy #toEasy { display: none; }
+  body.pro #easy { display: none; }
+  body.easy.setup #stage, body.easy.setup #easyResult, body.easy.result #easySetup { display: none; }
+  body.easy { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+  #easy { padding: 12px 16px 24px; }
+  .hero { padding: calc(20px + env(safe-area-inset-top)) 4px 12px; }
+  .hero h1 { margin: 0; font-size: 26px; letter-spacing: .02em; }
+  .hero p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+  .step h2 { display: flex; align-items: center; gap: 8px; font-size: 16px; color: var(--ink); letter-spacing: 0; }
+  .step h2 b { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 14px; }
+  .label { margin: 12px 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips.scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+  .chips button { flex: none; min-height: 40px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel);
+    color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; line-height: 1.25; }
+  .chips button small { display: block; font-size: 10px; color: var(--muted); }
+  .chips button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .chips button.on small { color: rgba(255,255,255,.85); }
+  .chips.small button { min-height: 34px; padding: 4px 12px; font-size: 13px; }
+  #eGallery { margin-top: 10px; }
+  #eThumbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; }
+  #eThumbs:empty { display: none; }
+  #eThumbs div { position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #000; }
+  #eThumbs img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #eThumbs span { position: absolute; left: 4px; bottom: 2px; color: #fff; font-size: 11px; text-shadow: 0 1px 3px #000; }
+  #eThumbs button { position: absolute; right: 2px; top: 2px; width: 26px; height: 26px; border-radius: 50%; border: 0; background: rgba(0,0,0,.6); color: #fff; font-size: 14px; cursor: pointer; }
+  .cta { position: sticky; bottom: 0; margin: 0 -16px; padding: 14px 16px calc(12px + env(safe-area-inset-bottom));
+    text-align: center; background: linear-gradient(to bottom, transparent, var(--bg) 22%); }
+  .cta .btn { box-shadow: 0 6px 20px rgba(0,0,0,.2); }
+  .cta .btn:disabled { opacity: 1; background: var(--line); border-color: var(--line); color: var(--muted); box-shadow: none; }
+  .cta .hint { margin-top: 6px; }
+  body.easy #play { display: none; }
+  #eResult { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  #eResult a { color: var(--accent); font-weight: 600; }
+
   /* 下部タブ */
   nav.tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: var(--panel);
     border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, 1fr);
@@ -122,7 +158,7 @@
   #hidden { position: fixed; left: 0; top: 0; width: 2px; height: 2px; opacity: 0; pointer-events: none; overflow: hidden; }
 </style>
 </head>
-<body>
+<body class="easy setup">
 <div class="wrap">
   <section id="stage">
     <div class="canvas-wrap"><div id="players"></div><canvas id="cv"></canvas></div>
@@ -130,8 +166,74 @@
       <button class="btn small" id="play" disabled>▶ プレビュー</button>
       <button class="btn small" id="stop" disabled>■</button>
       <progress id="prog" value="0" max="1"></progress>
+      <button class="btn small" id="toEasy">かんたん</button>
     </div>
     <div id="status">動画を追加してください</div>
+  </section>
+
+  <!-- かんたんモード：①動画 → ②長さと形 → ③テンプレ → 編集スタート -->
+  <section id="easy">
+    <div id="easySetup">
+      <div class="hero">
+        <h1>クリップ航路</h1>
+        <p>動画をえらんで、長さとテンプレを決めるだけ。<br>見どころを自動でつないで、1本のムービーにします。</p>
+      </div>
+      <div class="panel step">
+        <h2><b>1</b>動画をえらぶ <span id="eCount" class="count"></span></h2>
+        <div id="eThumbs"></div>
+        <button class="btn primary big" id="eAdd">＋ 写真アプリから動画をえらぶ</button>
+        <p class="hint">最大15本まで。何回かに分けて追加しても大丈夫です。</p>
+      </div>
+      <div class="panel step">
+        <h2><b>2</b>長さと形をえらぶ</h2>
+        <p class="label">仕上がりの長さ</p>
+        <div class="chips" id="eLen">
+          <button data-v="15">15秒</button><button data-v="30">30秒</button><button data-v="60">1分</button><button data-v="90">1分30秒</button><button data-v="none">全部つなぐ</button>
+        </div>
+        <p class="label">画面の形</p>
+        <div class="chips" id="eShape">
+          <button data-v="auto">おまかせ</button><button data-v="9:16">縦 9:16<small>TikTok・ストーリー</small></button><button data-v="16:9">横 16:9<small>YouTube</small></button><button data-v="1:1">正方形</button>
+        </div>
+        <p class="label">タイトル・BGM（なくてもOK）</p>
+        <input id="eTitle" type="text" placeholder="タイトル（例：夏の京都）">
+        <div class="btns" style="margin-top:8px">
+          <button class="btn small" id="eBgm">♪ BGMをえらぶ</button><span class="hint" id="eBgmName" style="margin:0"></span>
+        </div>
+      </div>
+      <div class="panel step">
+        <h2><b>3</b>テンプレートをえらぶ</h2>
+        <div class="chips small" id="eCat">
+          <button data-v="all" class="on">すべて</button><button data-v="short">ショート動画</button><button data-v="basic">ベーシック</button><button data-v="cinema">シネマ</button><button data-v="retro">レトロ</button><button data-v="fun">たのしい</button>
+        </div>
+        <div id="eGallery" class="gallery"></div>
+      </div>
+      <div class="cta">
+        <button class="btn primary big" id="eStart" disabled>✨ 編集スタート</button>
+        <p class="hint" id="eStartHint">まず動画をえらんでください</p>
+      </div>
+    </div>
+
+    <div id="easyResult">
+      <div class="panel">
+        <h2>できあがり <span id="eInfo" class="count"></span></h2>
+        <div class="btns">
+          <button class="btn primary" id="eRec">● 保存する</button>
+          <button class="btn" id="ePlay">▶ もう一度見る</button>
+        </div>
+        <div id="eResult"></div>
+        <p class="label">テンプレートを変える</p>
+        <div class="chips scroll" id="eTplRow"></div>
+        <p class="label">長さを変える</p>
+        <div class="chips" id="eLen2">
+          <button data-v="15">15秒</button><button data-v="30">30秒</button><button data-v="60">1分</button><button data-v="90">1分30秒</button><button data-v="none">全部</button>
+        </div>
+        <div class="btns" style="margin-top:16px">
+          <button class="btn" id="eBack">← 動画・設定を変える</button>
+          <button class="btn" id="ePro">✂️ 細かく編集する</button>
+        </div>
+        <p class="hint">保存は再生と同じ時間がかかります。途中でほかのアプリに切り替えると一時停止し、戻って「▶ 続きから」で再開できます。</p>
+      </div>
+    </div>
   </section>
 
   <main>
@@ -161,8 +263,9 @@
           </select></div>
         <div class="row"><label for="pace">カットの長さ</label>
           <select id="pace">
+            <option value="auto" selected>テンプレートにおまかせ</option>
             <option value="slow">ゆったり（6秒前後）</option>
-            <option value="normal" selected>ふつう（3〜4秒）</option>
+            <option value="normal">ふつう（3〜4秒）</option>
             <option value="fast">テンポよく（2秒前後）</option>
           </select></div>
         <button class="btn primary big" id="autoBtn" disabled>✨ この長さで自動編集する</button>
@@ -729,6 +832,144 @@ const TPL = {
     caption: (R, c, a, l) => captionDefault(R, c, a, l, { bg: 'rgba(0,0,0,.35)', shadow: false, size: 0.042 }),
   }),
 
+  // ----- ショート動画向け -----
+  tiktok: tpl({
+    name: 'TikTok風', desc: 'テンポのいいカット、弾むズーム、太字テロップ。縦型ショートに',
+    aspect: '9:16', pace: 'fast', trans: 'white', td: 0.2, font: 'sans', textAnim: 'pop', pulse: true,
+    grade(R) { saturate(R, 0.12); contrast(R, 0.3); },
+    caption(R, c, a, l) {
+      if (!c.caption.trim()) return;
+      txt(R, c.caption, R.w / 2, R.h * 0.68, R.u * 0.075, { weight: 900, color: '#fff', strokes: [['#000', 0.28]], shadow: false, anim: 'pop', local: l, alpha: a });
+    },
+    date(R, c, a) {
+      const y = R.h * 0.68 + (c.caption.trim() ? R.u * 0.11 : 0);
+      txt(R, fmtDate(c.date, 'jp'), R.w / 2, y, R.u * 0.036, { weight: 800, color: '#fff', strokes: [['#000', 0.3]], shadow: false, alpha: a });
+    },
+    title(R, t) {
+      if (!R.s.title || t > 3) return;
+      txt(R, R.s.title, R.w / 2, R.h * 0.3, R.u * 0.08, { weight: 900, color: '#111', bg: '#fff', bgR: R.u * 0.02, shadow: false, anim: 'pop', local: t, alpha: clamp((3 - t) / 0.3, 0, 1) });
+    },
+  }),
+
+  story: tpl({
+    name: 'ストーリー風', desc: '上に進行バーとアイコン・日付。インスタのストーリーズ風',
+    aspect: '9:16', pace: 'normal', trans: 'slide', td: 0.35, font: 'round', textAnim: 'pop',
+    grade(R) { tint(R, 'screen', '#ffffff', 0.04); saturate(R, 0.06); },
+    hud(R, t, active) {
+      const { w, u } = R, c = R.ctx, m = u * 0.03;
+      const shade = c.createLinearGradient(0, 0, 0, u * 0.3);
+      shade.addColorStop(0, 'rgba(0,0,0,.35)'); shade.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = shade; c.fillRect(0, 0, w, u * 0.3);
+      const n = Math.max(1, R.nClips || 4);
+      const cur = active.filter(a => a.g.kind === 'clip').pop();
+      const idx = cur ? cur.g.idx : 0, frac = cur ? clamp(cur.local / cur.g.len, 0, 1) : 0.4;
+      const gap = u * 0.01, bw = (w - m * 2 - gap * (n - 1)) / n, bh = Math.max(2, u * 0.007);
+      for (let i = 0; i < n; i++) {
+        const x = m + i * (bw + gap);
+        c.fillStyle = 'rgba(255,255,255,.35)'; c.fillRect(x, m, bw, bh);
+        c.fillStyle = '#fff'; c.fillRect(x, m, bw * (i < idx ? 1 : i === idx ? frac : 0), bh);
+      }
+      const r = u * 0.04, ax = m + r, ay = m + bh + u * 0.02 + r;
+      const ring = c.createLinearGradient(ax - r, ay + r, ax + r, ay - r);
+      ring.addColorStop(0, '#feda75'); ring.addColorStop(0.5, '#d62976'); ring.addColorStop(1, '#4f5bd5');
+      c.fillStyle = ring; c.beginPath(); c.arc(ax, ay, r, 0, 7); c.fill();
+      c.fillStyle = '#ddd'; c.beginPath(); c.arc(ax, ay, r * 0.82, 0, 7); c.fill();
+      txt(R, '🙂', ax, ay, r * 1.1, { shadow: false });
+      const name = R.s.title || 'my story';
+      const when = cur ? fmtDate(cur.g.clip.date, 'short') : '';
+      txt(R, name, ax + r * 1.5, ay, u * 0.034, { align: 'left', font: 'sans', weight: 700, maxW: w * 0.5 });
+      c.save(); c.font = `700 ${Math.round(u * 0.034)}px ${FONTS.sans}`; const nw = Math.min(c.measureText(name).width, w * 0.5); c.restore();
+      if (when && cur && cur.g.clip.showDate) txt(R, when, ax + r * 1.5 + nw + u * 0.02, ay, u * 0.03, { align: 'left', color: 'rgba(255,255,255,.8)' });
+    },
+    caption(R, c, a, l) {
+      if (!c.caption.trim()) return;
+      txt(R, c.caption, R.w / 2, R.h * 0.62, R.u * 0.055, { font: 'round', weight: 800, color: '#111', bg: '#fff', bgR: R.u * 0.015, shadow: false, anim: 'pop', local: l, alpha: a });
+    },
+    date() {},
+    title(R, t) {
+      if (!R.s.title || t > 3) return;
+      txt(R, R.s.title, R.w / 2, R.h * 0.45, R.u * 0.075, { font: 'round', weight: 800, color: '#fff', bg: 'rgba(214,41,118,.9)', bgR: R.u * 0.02, shadow: false, anim: 'pop', local: t, alpha: clamp((3 - t) / 0.3, 0, 1) });
+    },
+  }),
+
+  sns: tpl({
+    name: 'SNS投稿風', desc: 'いいね・コメントのアイコンと流れる曲名。縦型SNSの画面風',
+    aspect: '9:16', pace: 'fast', trans: 'cut', td: 0.2, font: 'sans', textAnim: 'fade',
+    grade(R) { saturate(R, 0.08); contrast(R, 0.15); },
+    hud(R, t) {
+      const { w, h, u } = R, c = R.ctx;
+      const g = c.createLinearGradient(0, h * 0.62, 0, h);
+      g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.55)');
+      c.fillStyle = g; c.fillRect(0, h * 0.62, w, h * 0.38);
+      const x = w - u * 0.1;
+      let y = h * 0.46;
+      c.fillStyle = '#fff'; c.beginPath(); c.arc(x, y, u * 0.055, 0, 7); c.fill();
+      txt(R, '🙂', x, y, u * 0.065, { shadow: false });
+      c.fillStyle = '#fe2c55'; c.beginPath(); c.arc(x, y + u * 0.055, u * 0.02, 0, 7); c.fill();
+      txt(R, '+', x, y + u * 0.053, u * 0.03, { shadow: false, weight: 900 });
+      y += u * 0.2;
+      const likes = `${(1.2 + t * 0.07).toFixed(1)}万`;
+      for (const [icon, label] of [['❤️', likes], ['💬', '328'], ['🔖', '1.1万'], ['↪️', 'シェア']]) {
+        txt(R, icon, x, y, u * 0.07);
+        txt(R, label, x, y + u * 0.065, u * 0.028, { weight: 700 });
+        y += u * 0.16;
+      }
+      const dx = w - u * 0.1, dy = h - u * 0.12;
+      c.save(); c.translate(dx, dy); c.rotate(t * 1.5);
+      c.fillStyle = '#222'; c.beginPath(); c.arc(0, 0, u * 0.05, 0, 7); c.fill();
+      c.fillStyle = '#e03131'; c.beginPath(); c.arc(0, 0, u * 0.02, 0, 7); c.fill();
+      c.restore();
+      const name = '@' + (R.s.title ? R.s.title.replace(/\s+/g, '_') : 'my_movie');
+      txt(R, name, u * 0.05, h - u * 0.36, u * 0.042, { align: 'left', weight: 800, maxW: w * 0.7 });
+      const song = `♪ オリジナル楽曲 - ${R.s.bgmName || name.slice(1)}　　`;
+      const bw = w * 0.6, bx = u * 0.05, by = h - u * 0.12;
+      c.save();
+      c.beginPath(); c.rect(bx, by - u * 0.03, bw, u * 0.06); c.clip();
+      c.font = `600 ${Math.round(u * 0.032)}px ${FONTS.sans}`;
+      const sw = c.measureText(song).width;
+      c.restore();
+      c.save();
+      c.beginPath(); c.rect(bx, by - u * 0.03, bw, u * 0.06); c.clip();
+      const off = (t * u * 0.08) % sw;
+      txt(R, song, bx - off, by, u * 0.032, { align: 'left', weight: 600, maxW: sw });
+      txt(R, song, bx - off + sw, by, u * 0.032, { align: 'left', weight: 600, maxW: sw });
+      c.restore();
+    },
+    caption(R, c, a) {
+      if (!c.caption.trim()) return;
+      txt(R, c.caption, R.u * 0.05, R.h - R.u * 0.28, R.u * 0.036, { align: 'left', alpha: a, maxW: R.w * 0.7 });
+    },
+    date(R, c, a) {
+      txt(R, fmtDate(c.date, 'jp'), R.u * 0.05, R.h - R.u * 0.2, R.u * 0.03, { align: 'left', alpha: a, color: 'rgba(255,255,255,.8)' });
+    },
+    title() {},
+  }),
+
+  shortframe: tpl({
+    name: '上下テロップ', desc: '上に大きなタイトル、下に字幕。縦型ショートの定番レイアウト',
+    aspect: '9:16', pace: 'normal', trans: 'cut', td: 0.2, font: 'sans', textAnim: 'pop',
+    layout(R) {
+      const r = { x: 0, y: R.h * 0.24, w: R.w, h: R.h * 0.5 };
+      return { card: r, photo: r, rot: 0, radius: 0 };
+    },
+    back(R) { fill(R, '#000'); },
+    grade(R) { saturate(R, 0.08); contrast(R, 0.2); },
+    hud(R, t, active) {
+      const cur = active.filter(a => a.g.kind === 'clip').pop();
+      const head = R.s.title || (cur ? fmtDate(cur.g.clip.date, 'jp') : '');
+      if (head) txt(R, head, R.w / 2, R.h * 0.12, R.u * 0.085, { weight: 900, color: '#fff', strokes: [['#e03131', 0.28]], shadow: false, maxW: R.w * 0.92 });
+    },
+    caption(R, c, a, l) {
+      if (!c.caption.trim()) return;
+      txt(R, c.caption, R.w / 2, R.h * 0.83, R.u * 0.075, { weight: 900, color: '#ffe600', strokes: [['#000', 0.28]], shadow: false, anim: 'pop', local: l, alpha: a, maxW: R.w * 0.92 });
+    },
+    date(R, c, a) {
+      if (!R.s.title) return;
+      txt(R, fmtDate(c.date, 'jp'), R.w / 2, R.h * 0.93, R.u * 0.035, { color: 'rgba(255,255,255,.75)', shadow: false, alpha: a });
+    },
+    title() {},
+  }),
+
   cinema: tpl({
     name: 'シネマ', desc: 'シネスコの黒帯とティール＆オレンジ。映画のワンシーン風',
     trans: 'cross', td: 1.2, font: 'serif',
@@ -1106,6 +1347,14 @@ const TPL = {
   }),
 };
 
+const CATS = {
+  natural: 'basic', tiktok: 'short', story: 'short', sns: 'short', shortframe: 'short',
+  cinema: 'cinema', film: 'cinema', mono: 'cinema', trailer: 'cinema',
+  eightmm: 'retro', vhs: 'retro', digicam: 'retro', rec: 'retro', silent: 'retro',
+  polaroid: 'fun', vlog: 'fun', variety: 'fun', neon: 'fun', party: 'fun', travel: 'fun',
+};
+for (const [k, v] of Object.entries(CATS)) TPL[k].cat = v;
+
 // ---------- 描画パイプライン ----------
 const OVERLAP = new Set(['cross', 'zoom', 'slide', 'glitch']);
 
@@ -1123,8 +1372,9 @@ function drawMedia(R, src, o) {
   const c = R.ctx, t = R.tpl, { w, h } = R;
   c.save();
   c.globalAlpha = o.alpha;
-  if (o.scale !== 1 || o.dx) {
-    c.translate(w / 2 + o.dx, h / 2); c.scale(o.scale, o.scale); c.translate(-w / 2, -h / 2);
+  const sc = o.scale * (t.pulse ? 1 + 0.1 * Math.max(0, 1 - (o.local ?? 9) / 0.35) : 1);
+  if (sc !== 1 || o.dx) {
+    c.translate(w / 2 + o.dx, h / 2); c.scale(sc, sc); c.translate(-w / 2, -h / 2);
   }
   const jx = t.shake ? (Math.random() - 0.5) * R.u / 240 : 0, jy = t.shake ? (Math.random() - 0.5) * R.u / 180 : 0;
   if (t.layout) {
@@ -1234,6 +1484,7 @@ function settings(overrideTpl) {
   const id = overrideTpl || tplId;
   const t = TPL[id];
   let aspect = $('aspect').value;
+  if (aspect === 'auto' && t.aspect) aspect = t.aspect;
   if (aspect === 'auto') {
     const used = segs.length ? segs.map(g => g.src) : clips;
     const portrait = used.filter(c => c.h > c.w).length;
@@ -1248,6 +1499,7 @@ function settings(overrideTpl) {
     td: $('td').value === 'auto' ? t.td : Number($('td').value),
     fit: $('fit').value, title: $('title').value.trim(), dfmt: $('dfmt').value, dpos: $('dpos').value,
     bgmVol: +$('bgmVol').value, origVol: +$('origVol').value,
+    bgmName: bgmFiles[0] ? bgmFiles[0].name.replace(/\.[^.]+$/, '') : '',
   };
 }
 
@@ -1319,7 +1571,10 @@ $('files').onchange = async (e) => {
   }
   $('addBtn').disabled = false;
   if (failed.length) alert(`読み込めなかった動画があります：\n${failed.join('\n')}`);
-  if (added.length) {
+  if (added.length && mode === 'easy') {
+    added.forEach(c => segs.push(makeSeg(c, 0, c.duration)));
+    tlManual = false;
+  } else if (added.length) {
     if (targetLen() && !tlManual) await autoEdit();
     else added.forEach(c => segs.push(makeSeg(c, 0, c.duration)));
     if (!selSeg && segs.length) selectSeg(segs[0]);
@@ -1705,7 +1960,7 @@ async function autoEdit() {
     for (const [i, c] of src.entries()) {
       await analyze(c, (p) => setStatus(`見どころを探しています ${i + 1} / ${src.length}（${Math.round(p * 100)}%）`));
     }
-    const pace = $('pace').value;
+    const pace = $('pace').value === 'auto' ? (TPL[tplId].pace || 'normal') : $('pace').value;
     const w = src.map(c => Math.sqrt(c.duration));
     const W = w.reduce((a, b) => a + b, 0);
     let budget = target;
@@ -1773,35 +2028,42 @@ function sampleClip() {
   };
 }
 
-function renderGallery() {
-  const gal = $('gallery');
+const TPL_ORDER = ['natural', 'tiktok', 'story', 'sns', 'shortframe', 'cinema', 'film', 'trailer', 'mono', 'vlog', 'polaroid', 'travel', 'party', 'variety', 'neon', 'digicam', 'vhs', 'rec', 'eightmm', 'silent'];
+let galleryCat = 'all';
+
+function chooseTemplate(id) {
+  tplId = id;
+  try { localStorage.setItem('clip.tpl', id); } catch {}
+  keepTarget();
+}
+
+function renderGalleryInto(gal, cat) {
   if (!gal.children.length) {
-    for (const [id, t] of Object.entries(TPL)) {
+    for (const id of TPL_ORDER) {
+      const t = TPL[id];
       const b = document.createElement('button');
       b.className = 'tpl';
       b.dataset.id = id;
       b.innerHTML = `<canvas></canvas><div><b>${t.name}</b><span>${t.desc}</span></div>`;
-      b.onclick = () => {
-        tplId = id;
-        try { localStorage.setItem('clip.tpl', id); } catch {}
-        gal.querySelectorAll('.tpl').forEach(el => el.classList.toggle('sel', el.dataset.id === id));
-        keepTarget();
-        refresh();
-      };
+      b.onclick = () => { chooseTemplate(id); refresh(); };
       gal.appendChild(b);
     }
   }
   const smp = sampleClip();
   gal.querySelectorAll('.tpl').forEach(b => {
     const id = b.dataset.id;
+    const show = cat === 'all' || TPL[id].cat === cat;
+    b.hidden = !show;
     b.classList.toggle('sel', id === tplId);
+    if (!show) return;
     const s = settings(id);
     const k = 200 / Math.max(s.w, s.h);
     const small = { ...s, w: Math.round(s.w * k), h: Math.round(s.h * k), title: '' };
     const R = makeR(b.querySelector('canvas'), small);
     const t = TPL[id];
-    const g0 = { kind: 'clip', clip: smp.clip, idx: 0, i: 0, len: 5, overlap: 0, nextOverlap: 0, last: true };
-    if (t.cards && (id === 'trailer' || id === 'silent')) {
+    const g0 = { kind: 'clip', clip: smp.clip, idx: 1, i: 0, len: 5, overlap: 0, nextOverlap: 0, last: true };
+    R.nClips = 4;
+    if (id === 'trailer' || id === 'silent') {
       // 文字カードのあるテンプレートは、映像と文字カードの両方の雰囲気がわかるよう左右で見せる
       renderFrame(R, [{ g: g0, src: smp.src, local: 1.2 }], 1.2, 0);
       const half = document.createElement('canvas');
@@ -1814,6 +2076,11 @@ function renderGallery() {
   });
 }
 
+function renderGallery() {
+  if (!document.querySelector('[data-tab="tpl"]').hidden && mode === 'pro') renderGalleryInto($('gallery'), 'all');
+  if (mode === 'easy' && document.body.classList.contains('setup')) renderGalleryInto($('eGallery'), galleryCat);
+}
+
 // テンプレートや切り替えを変えると全体の長さが変わるので、おまかせ中なら目標に合わせ直す
 function keepTarget() {
   if (!tlManual && targetLen() && segs.length) fitExact(targetLen());
@@ -1824,6 +2091,7 @@ function drawStill() {
   if (running) return;
   const s = settings();
   const R = makeR(cv, s);
+  R.nClips = segs.length;
   const g = selSeg;
   const src = g && ev.readyState >= 2 ? ev : g ? g.src.frame : null;
   if (g && src) {
@@ -1851,13 +2119,146 @@ function refresh() {
   updateLengthInfo();
   if (!document.querySelector('[data-tab="edit"]').hidden) renderTimeline();
   drawStill();
-  if (!document.querySelector('[data-tab="tpl"]').hidden) renderGallery();
+  renderGallery();
+  if (mode === 'easy') renderEasy();
 }
 
 ['trans', 'td'].forEach(id => $(id).addEventListener('change', () => { keepTarget(); refresh(); }));
 ['aspect', 'height', 'fit', 'dfmt', 'dpos'].forEach(id => $(id).addEventListener('change', refresh));
 $('title').addEventListener('input', () => drawStill());
 $('title').addEventListener('change', refresh);
+
+// ---------- かんたんモード ----------
+let mode = 'easy';
+
+function setMode(m, view) {
+  mode = m;
+  document.body.classList.toggle('easy', m === 'easy');
+  document.body.classList.toggle('pro', m === 'pro');
+  if (m === 'easy') setView(view || (segs.length ? 'result' : 'setup'));
+  else { document.body.classList.remove('setup', 'result'); showTab('edit'); }
+  refresh();
+}
+
+function setView(v) {
+  document.body.classList.toggle('setup', v === 'setup');
+  document.body.classList.toggle('result', v === 'result');
+  window.scrollTo(0, 0);
+  refresh();
+}
+
+function markChips(id, value) {
+  document.querySelectorAll(`#${id} button`).forEach(b => b.classList.toggle('on', b.dataset.v === value));
+}
+
+function renderEasy() {
+  $('eCount').textContent = clips.length ? `${clips.length} / ${MAX_CLIPS}本` : '';
+  $('eStart').disabled = !clips.length || !!running;
+  $('eStartHint').textContent = clips.length
+    ? `${clips.length}本の動画を「${TPL[tplId].name}」で${targetLen() ? ` ${fmtT(targetLen())} に` : ''}まとめます`
+    : 'まず動画をえらんでください';
+  markChips('eLen', $('target').value);
+  markChips('eLen2', $('target').value);
+  markChips('eShape', $('aspect').value);
+  markChips('eCat', galleryCat);
+  const th = $('eThumbs');
+  if (th.dataset.n !== clips.map(c => c.id).join()) {
+    th.dataset.n = clips.map(c => c.id).join();
+    th.innerHTML = '';
+    clips.forEach(c => {
+      const d = document.createElement('div');
+      d.innerHTML = `<img src="${c.thumb}" alt=""><span>${fmtT(c.duration)}</span><button title="はずす">×</button>`;
+      d.querySelector('button').onclick = () => {
+        segs = segs.filter(g => g.src !== c);
+        clips = clips.filter(x => x !== c);
+        URL.revokeObjectURL(c.url);
+        if (selSeg && selSeg.src === c) selectSeg(segs[0] || null);
+        renderLibrary();
+        refresh();
+      };
+      th.appendChild(d);
+    });
+  }
+  const row = $('eTplRow');
+  if (!row.children.length) {
+    for (const id of TPL_ORDER) {
+      const b = document.createElement('button');
+      b.dataset.v = id;
+      b.textContent = TPL[id].name;
+      b.onclick = () => { stopPreview(); chooseTemplate(id); refresh(); run({ record: false }); };
+      row.appendChild(b);
+    }
+  }
+  markChips('eTplRow', tplId);
+  const { total } = timeline();
+  $('eInfo').textContent = segs.length ? `${TPL[tplId].name} ・ ${segs.length}カット ・ ${fmtT(total)}` : '';
+}
+
+// iPhoneで音付き再生を許可してもらうため、タップの瞬間に再生要素を一度鳴らしておく
+function unlockMedia() {
+  ensureAudio();
+  audioCtx.resume();
+  players.forEach((p, i) => {
+    const c = clips[i % Math.max(1, clips.length)];
+    if (c && !p.v.src) { p.v.src = c.url; p.a.src = c.url; }
+    p.v.play().catch(() => {}); p.v.pause();
+    p.a.play().catch(() => {}); p.a.pause();
+  });
+  if (bgmFiles.length && !bgmEl.src) bgmEl.src = URL.createObjectURL(bgmFiles[0]);
+  bgmEl.play().catch(() => {}); bgmEl.pause();
+}
+
+function stopPreview() {
+  if (running && !running.record && running.stop) running.stop();
+}
+
+async function buildMovie() {
+  tlManual = false;
+  if (targetLen()) {
+    await autoEdit();
+  } else {
+    segs = clips.filter(c => c.include).map(c => makeSeg(c, 0, c.duration));
+    selectSeg(segs[0] || null);
+  }
+  refresh();
+}
+
+$('eAdd').onclick = () => $('files').click();
+document.querySelectorAll('#eLen button').forEach(b => b.onclick = () => { $('target').value = b.dataset.v; refresh(); });
+document.querySelectorAll('#eShape button').forEach(b => b.onclick = () => { $('aspect').value = b.dataset.v; refresh(); });
+document.querySelectorAll('#eCat button').forEach(b => b.onclick = () => { galleryCat = b.dataset.v; refresh(); });
+$('eTitle').addEventListener('input', () => { $('title').value = $('eTitle').value; });
+$('eTitle').addEventListener('change', refresh);
+$('title').addEventListener('input', () => { $('eTitle').value = $('title').value; });
+$('eBgm').onclick = () => $('bgm').click();
+
+$('eStart').onclick = async () => {
+  if (!clips.length) return;
+  unlockMedia();
+  setView('result');
+  setStatus('見どころを探しています…');
+  await buildMovie();
+  run({ record: false });
+};
+$('ePlay').onclick = () => { stopPreview(); run({ record: false }); };
+$('eRec').onclick = () => {
+  if (running && running.record) return;
+  stopPreview();
+  if (targetLen() && !tlManual) fitExact(targetLen());
+  window.scrollTo(0, 0);
+  run({ record: true });
+};
+document.querySelectorAll('#eLen2 button').forEach(b => b.onclick = async () => {
+  if (running && running.record) return;
+  unlockMedia();
+  stopPreview();
+  $('target').value = b.dataset.v;
+  await buildMovie();
+  run({ record: false });
+});
+$('eBack').onclick = () => { stopPreview(); setView('setup'); };
+$('ePro').onclick = () => { stopPreview(); setMode('pro'); };
+$('toEasy').onclick = () => { stopPreview(); setMode('easy', segs.length ? 'result' : 'setup'); };
 
 // ---------- 再生・書き出し ----------
 let audioCtx = null, master = null, recDest = null, bgmEl = null, bgmGain = null;
@@ -1921,6 +2322,8 @@ function release(p) {
 $('bgm').onchange = (e) => {
   bgmFiles = [...e.target.files];
   $('bgmList').textContent = bgmFiles.map((f, i) => `${i + 1}. ${f.name}`).join('\n');
+  $('eBgmName').textContent = bgmFiles.map(f => f.name).join('、');
+  if (bgmEl) bgmEl.removeAttribute('src');
 };
 
 function pickMime() {
@@ -1999,6 +2402,7 @@ function run({ record }) {
     if (recorder) recorder.start(1000);
     let t0 = performance.now();
     const R = makeR(cv, s);
+    R.nClips = clipSegs.length;
 
     let stopped = false;
     const finish = (reason) => {
@@ -2022,7 +2426,7 @@ function run({ record }) {
         const first = clipSegs[0].clip.date;
         const name = `${first.getFullYear()}${pad(first.getMonth() + 1)}${pad(first.getDate())}_${(s.title || TPL[s.tpl].name).replace(/[\\/:*?"<>|\s（）()]+/g, '_')}.${ext}`;
         const file = new File([blob], name, { type: blob.type });
-        const box = $('result');
+        const box = mode === 'easy' ? $('eResult') : $('result');
         box.innerHTML = '';
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           const b = document.createElement('button');
@@ -2044,7 +2448,7 @@ function run({ record }) {
         }
         done();
         setStatus(ext === 'webm' ? '完了（WebM形式）' : '完了しました');
-        showTab('out');
+        if (mode === 'pro') showTab('out');
       };
       recorder.stop();
     };
@@ -2164,7 +2568,7 @@ $('stop').onclick = () => {
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 selectSeg(null);
 renderLibrary();
-refresh();
+setMode('easy', 'setup');
 </script>
 </body>
 </html>
