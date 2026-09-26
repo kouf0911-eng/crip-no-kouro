@@ -184,6 +184,8 @@
 
   .vh { position: fixed; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
   label.pick.done { opacity: .5; pointer-events: none; }
+  .waitnote { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(240,180,106,.1); border: 1px solid rgba(240,180,106,.35); font-size: 13px; line-height: 1.6; }
+  .waitnote b { color: var(--accent); }
   .altrow { display: flex; gap: 8px; margin-top: 8px; }
   label.pick.alt { flex: 1; color: var(--muted); white-space: normal; font-size: 12px; }
   .inapp { border: 1px solid var(--accent); background: var(--sel); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; font-size: 13px; line-height: 1.6; }
@@ -229,7 +231,7 @@
       <div class="hero">
         <h1 class="brand">Tsumugi<span>つむぎ</span></h1>
         <p>思い出の動画を、1本のムービーにつむぐ。<br>動画をえらんで、長さとテンプレを決めるだけです。</p>
-        <p class="ver">ver 12 ・ night</p>
+        <p class="ver">ver 13 ・ night</p>
       </div>
       <div class="panel step">
         <h2><b>1</b>動画をえらぶ <span id="eCount" class="count"></span></h2>
@@ -238,13 +240,13 @@
           いまアプリ内のブラウザで開いています。この画面では写真の選択がうまくいかないことがあります。<br>
           右下のコンパス（🧭）や「Safariで開く」から <b>Safari</b> で開き直してください。
         </div>
-        <label for="files" class="btn primary big pick" id="eAdd" role="button">＋ 写真アプリから動画をえらぶ</label>
+        <label for="files" class="btn primary big pick" id="eAdd" role="button">＋ 動画をえらぶ（まとめてOK）</label>
+        <div class="waitnote">⏳ ✓ を押したあと、<b>選択画面が閉じるまでそのまま待ってください</b>。撮ったままの動画は、iPhoneの準備に<b>30秒〜1分ほど</b>かかることがあります。</div>
         <div class="altrow">
-          <label for="filesMulti" class="btn small pick alt" role="button">まとめてえらぶ</label>
-          <label for="files2" class="btn small pick alt" role="button">ファイルからまとめて</label>
+          <label for="filesOne" class="btn small pick alt" role="button">1本ずつえらぶ</label>
+          <label for="files2" class="btn small pick alt" role="button">ファイルからえらぶ</label>
         </div>
-        <p class="hint">大きいボタンは1本ずつ、続けて何本でも追加できます（最大15本）。<br>
-          「まとめてえらぶ」は、iPhoneで撮ったままの動画だと ✓ が効かないことがあります（iOSの不具合）。その時は1本ずつか、写真アプリで動画を複数えらんで 共有 →「"ファイル"に保存」してから「ファイルからまとめて」を使ってください。</p>
+        <p class="hint">最大15本まで。あとから追加もできます。</p>
       </div>
       <div class="panel step">
         <h2><b>2</b>長さと形をえらぶ</h2>
@@ -478,9 +480,9 @@
   <button data-go="out"><i>⬇️</i>書き出し</button>
 </nav>
 <div id="hidden"></div>
-<!-- iOS 26.5：撮ったままの動画は「複数選択」だと ✓ が効かないことがある。1本ずつ（確実）とまとめて（効く時だけ）を両方用意 -->
-<input id="files" class="vh" type="file" accept="video/*">
-<input id="filesMulti" class="vh" type="file" accept="image/*,video/*" multiple>
+<!-- iOS 26.5 の実機診断：accept を MP4/MOV に明示＋複数選択で、撮ったままの4K MOVも元のまま届く（大きいと✓の後に数十秒かかる） -->
+<input id="files" class="vh" type="file" accept="video/mp4,video/quicktime" multiple>
+<input id="filesOne" class="vh" type="file" accept="video/*">
 <input id="files2" class="vh" type="file" multiple>
 <div id="busy" hidden>
   <div class="busybox">
@@ -1630,7 +1632,7 @@ const targetLen = () => $('target').value === 'none' ? 0 : Number($('target').va
 
 // ---------- 素材の追加 ----------
 $('files2').onchange = (e) => $('files').onchange(e);
-$('filesMulti').onchange = (e) => $('files').onchange(e);
+$('filesOne').onchange = (e) => $('files').onchange(e);
 $('files').onchange = async (e) => {
   let files = [...e.target.files].filter(f => /^video\//.test(f.type) || /\.(mov|mp4|m4v)$/i.test(f.name));
   const skipped = e.target.files.length - files.length;
@@ -2245,7 +2247,7 @@ function markChips(id, value) {
 }
 
 function renderEasy() {
-  $('eAdd').textContent = !clips.length ? '＋ 動画をえらぶ（1本ずつ）' : clips.length >= MAX_CLIPS ? `${MAX_CLIPS}本えらびました` : `＋ 次の動画をえらぶ（${clips.length} / ${MAX_CLIPS}本）`;
+  $('eAdd').textContent = !clips.length ? '＋ 動画をえらぶ（まとめてOK）' : clips.length >= MAX_CLIPS ? `${MAX_CLIPS}本えらびました` : `＋ 動画を追加する（${clips.length} / ${MAX_CLIPS}本）`;
   $('eAdd').classList.toggle('done', clips.length >= MAX_CLIPS);
   $('eCount').textContent = clips.length ? `${clips.length} / ${MAX_CLIPS}本` : '';
   $('eStart').disabled = !clips.length || !!running;
