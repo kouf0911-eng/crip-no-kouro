@@ -179,6 +179,8 @@
   .cta .btn:disabled { opacity: 1; background: rgba(255,255,255,.07); border-color: var(--line); color: var(--muted); box-shadow: none; }
   .cta .hint { margin-top: 6px; }
   body.easy #play { display: none; }
+  #eSkills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  #eSkills span { font-size: 11px; padding: 3px 9px; border-radius: 999px; border: 1px solid rgba(127,214,194,.35); color: var(--accent-2); background: rgba(127,214,194,.07); }
   #eResult { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
   #eResult a { color: var(--accent); font-weight: 600; }
 
@@ -232,7 +234,7 @@
       <div class="hero">
         <h1 class="brand">Tsumugi<span>つむぎ</span></h1>
         <p>思い出の動画を、1本のムービーにつむぐ。<br>動画をえらんで、長さとテンプレを決めるだけです。</p>
-        <p class="ver">ver 14 ・ night　<button class="linkbtn" id="resetAll" hidden>最初からやり直す</button></p>
+        <p class="ver">ver 15 ・ night　<button class="linkbtn" id="resetAll" hidden>最初からやり直す</button></p>
       </div>
       <div class="panel step">
         <h2><b>1</b>動画をえらぶ <span id="eCount" class="count"></span></h2>
@@ -258,6 +260,10 @@
         <p class="label">画面の形</p>
         <div class="chips" id="eShape">
           <button data-v="auto">おまかせ</button><button data-v="9:16">縦 9:16<small>TikTok・ストーリー</small></button><button data-v="16:9">横 16:9<small>YouTube</small></button><button data-v="1:1">正方形</button>
+        </div>
+        <p class="label">編集のしかた</p>
+        <div class="chips small" id="eOpts">
+          <button data-k="order">🕒 撮影した順に並べる</button><button data-k="chapters">📅 日付の見出し</button>
         </div>
         <p class="label">タイトル・BGM（なくてもOK）</p>
         <input id="eTitle" type="text" placeholder="タイトル（例：夏の京都）">
@@ -285,6 +291,7 @@
           <button class="btn primary" id="eRec">● 保存する</button>
           <button class="btn" id="ePlay">▶ もう一度見る</button>
         </div>
+        <div id="eSkills"></div>
         <div id="eResult"></div>
         <p class="label">テンプレートを変える</p>
         <div class="chips scroll" id="eTplRow"></div>
@@ -402,7 +409,26 @@
             <option value="zoom">ズーム</option>
             <option value="slide">スライド</option>
             <option value="glitch">グリッチ</option>
+            <option value="whip">ウィップ（素早いスライド）</option>
+            <option value="blur">ぼかしディゾルブ</option>
+            <option value="leak">光漏れ（フィルム）</option>
             <option value="cut">カット</option>
+          </select></div>
+        <div class="row"><label for="transMode">入れる場所</label>
+          <select id="transMode">
+            <option value="auto">テンプレートにおまかせ</option>
+            <option value="scene">場面の変わり目だけ（プロ推奨）</option>
+            <option value="every">毎カット</option>
+          </select></div>
+        <div class="row"><label for="order">並び順</label>
+          <select id="order">
+            <option value="chrono">撮影した順</option>
+            <option value="manual">えらんだ順</option>
+          </select></div>
+        <div class="row"><label for="chapters">日付の見出し</label>
+          <select id="chapters">
+            <option value="on">入れる（複数の日にまたがる時）</option>
+            <option value="off">入れない</option>
           </select></div>
         <div class="row"><label for="td">切り替えの速さ</label>
           <select id="td">
@@ -912,7 +938,7 @@ const TPL = {
   // ----- ショート動画向け -----
   tiktok: tpl({
     name: 'TikTok風', desc: 'テンポのいいカット、弾むズーム、太字テロップ。縦型ショートに',
-    aspect: '9:16', pace: 'fast', trans: 'white', td: 0.2, font: 'sans', textAnim: 'pop', pulse: true,
+    aspect: '9:16', pace: 'fast', trans: 'white', td: 0.2, font: 'sans', textAnim: 'pop', pulse: true, transMode: 'every', drift: false,
     grade(R) { saturate(R, 0.12); contrast(R, 0.3); },
     caption(R, c, a, l) {
       if (!c.caption.trim()) return;
@@ -971,7 +997,7 @@ const TPL = {
 
   sns: tpl({
     name: 'SNS投稿風', desc: 'いいね・コメントのアイコンと流れる曲名。縦型SNSの画面風',
-    aspect: '9:16', pace: 'fast', trans: 'cut', td: 0.2, font: 'sans', textAnim: 'fade',
+    aspect: '9:16', pace: 'fast', trans: 'cut', td: 0.2, font: 'sans', textAnim: 'fade', drift: false,
     grade(R) { saturate(R, 0.08); contrast(R, 0.15); },
     hud(R, t) {
       const { w, h, u } = R, c = R.ctx;
@@ -1072,7 +1098,7 @@ const TPL = {
 
   film: tpl({
     name: 'フィルム', desc: '暖かい色と粒子。フィルムカメラで撮ったような質感',
-    trans: 'cross', td: 0.8, font: 'serif',
+    trans: 'leak', td: 0.9, font: 'serif',
     bars: (R) => letterbox(R, 2.2, 0.06),
     grade(R) {
       contrast(R, 0.45);
@@ -1099,13 +1125,13 @@ const TPL = {
 
   mono: tpl({
     name: 'モノクロ', desc: '白黒・ハイコントラスト。静かでドラマチック',
-    trans: 'cross', td: 0.9, font: 'serif',
+    trans: 'blur', td: 1.0, font: 'serif',
     grade(R) { desat(R, 1); contrast(R, 0.8); grain(R, 0.1); vignette(R, 0.4); },
   }),
 
   vhs: tpl({
     name: 'VHSホームビデオ', desc: '走査線・にじみ・懐かしい日付表示',
-    trans: 'glitch', td: 0.3, font: 'mono',
+    trans: 'glitch', td: 0.3, font: 'mono', drift: false,
     grade(R) {
       chroma(R, Math.max(2, R.w / 300));
       saturate(R, 0.12);
@@ -1127,7 +1153,7 @@ const TPL = {
 
   digicam: tpl({
     name: 'デジカメ日付', desc: '平成のコンデジ風。オレンジの日付スタンプ',
-    trans: 'white', td: 0.3,
+    trans: 'white', td: 0.3, drift: false,
     grade(R) {
       bloom(R, 0.15);
       tint(R, 'screen', '#2a2d40', 0.35);
@@ -1150,7 +1176,7 @@ const TPL = {
 
   rec: tpl({
     name: 'ビデオカメラREC', desc: 'ファインダーの枠・REC表示・タイムコード',
-    trans: 'cut', td: 0.3, font: 'mono',
+    trans: 'cut', td: 0.3, font: 'mono', drift: false,
     grade(R) { saturate(R, 0.06); vignette(R, 0.25); grain(R, 0.05); },
     hud(R, t) {
       const { w, h, u } = R, c = R.ctx, m = u * 0.06, L = u * 0.08, lw = Math.max(1, u * 0.006);
@@ -1210,7 +1236,7 @@ const TPL = {
 
   vlog: tpl({
     name: 'Vlog', desc: 'パステルの背景に丸いフレーム。ポップなテロップ',
-    trans: 'slide', td: 0.5, font: 'round', textAnim: 'pop',
+    trans: 'whip', td: 0.4, font: 'round', textAnim: 'pop',
     layout(R) {
       const m = R.u * 0.05;
       const r = { x: m, y: m, w: R.w - m * 2, h: R.h - m * 2 };
@@ -1249,7 +1275,7 @@ const TPL = {
 
   variety: tpl({
     name: 'バラエティ番組', desc: '太い縁取りのテロップがポンッと出るTV風',
-    trans: 'zoom', td: 0.35, font: 'round', textAnim: 'pop',
+    trans: 'zoom', td: 0.35, font: 'round', textAnim: 'pop', transMode: 'every',
     grade(R) { saturate(R, 0.15); contrast(R, 0.25); },
     caption(R, c, a, l) {
       if (!c.caption.trim()) return;
@@ -1284,7 +1310,7 @@ const TPL = {
 
   neon: tpl({
     name: 'ネオン・グリッチ', desc: 'RGBずれとノイズ、光る文字。パーティー・夜の街に',
-    trans: 'glitch', td: 0.35, font: 'sans', textAnim: 'type',
+    trans: 'glitch', td: 0.35, font: 'sans', textAnim: 'type', transMode: 'every',
     grade(R) {
       contrast(R, 0.5);
       tint(R, 'soft-light', '#ff2bd6', 0.18);
@@ -1337,7 +1363,7 @@ const TPL = {
 
   travel: tpl({
     name: 'トラベル', desc: '鮮やかな色とパスポート風スタンプの日付',
-    trans: 'slide', td: 0.45, font: 'sans', textAnim: 'slide',
+    trans: 'whip', td: 0.4, font: 'sans', textAnim: 'slide',
     grade(R) { saturate(R, 0.18); contrast(R, 0.3); tint(R, 'soft-light', '#ffb86b', 0.12); vignette(R, 0.2); },
     caption(R, c, a, l) {
       if (!c.caption.trim()) return;
@@ -1365,7 +1391,7 @@ const TPL = {
 
   trailer: tpl({
     name: '予告編', desc: '黒い文字カードをはさむ映画の予告編風。最後にCOMING SOON',
-    trans: 'zoom', td: 0.3, font: 'serif', noTitle: true,
+    trans: 'zoom', td: 0.3, font: 'serif', noTitle: true, transMode: 'every',
     bars: (R) => letterbox(R, 2.39, 0.1),
     grade(R) { contrast(R, 0.55); desat(R, 0.2); tint(R, 'soft-light', '#1d5c7a', 0.25); vignette(R, 0.4); },
     cards(items, s) {
@@ -1433,7 +1459,11 @@ const CATS = {
 for (const [k, v] of Object.entries(CATS)) TPL[k].cat = v;
 
 // ---------- 描画パイプライン ----------
-const OVERLAP = new Set(['cross', 'zoom', 'slide', 'glitch']);
+// 前後の映像が重なる切り替え（重なっている時間ぶん全体が短くなる）
+const OVERLAP = new Set(['cross', 'zoom', 'slide', 'whip', 'glitch', 'blur', 'leak']);
+const DIP = new Set(['black', 'white']);
+const SCENE_GAP = 20 * 60 * 1000; // 撮影時刻が20分以上離れたら「場面が変わった」とみなす
+const smooth = (t) => t * t * t * (t * (t * 6 - 15) + 10); // なめらかな加減速
 
 function makeR(canvas, s) {
   if (canvas.width !== s.w || canvas.height !== s.h) { canvas.width = s.w; canvas.height = s.h; }
@@ -1449,9 +1479,17 @@ function drawMedia(R, src, o) {
   const c = R.ctx, t = R.tpl, { w, h } = R;
   c.save();
   c.globalAlpha = o.alpha;
-  const sc = o.scale * (t.pulse ? 1 + 0.1 * Math.max(0, 1 - (o.local ?? 9) / 0.35) : 1);
-  if (sc !== 1 || o.dx) {
-    c.translate(w / 2 + o.dx, h / 2); c.scale(sc, sc); c.translate(-w / 2, -h / 2);
+  let sc = o.scale * (t.pulse ? 1 + 0.1 * Math.max(0, 1 - (o.local ?? 9) / 0.35) : 1);
+  let px = 0, py = 0;
+  // プロの定番：止まった絵にも「ゆっくり寄る／引く」動きをつける（カットごとに向きを変える）
+  if (t.drift !== false && o.len && o.local != null) {
+    const p = clamp(o.local / o.len, 0, 1), dir = (o.idx ?? 0) % 2 ? -1 : 1;
+    sc *= dir > 0 ? 1.015 + 0.045 * p : 1.06 - 0.045 * p;
+    px = ((o.idx ?? 0) % 3 - 1) * R.u * 0.012 * (p - 0.5);
+    py = R.u * 0.006 * (p - 0.5) * dir;
+  }
+  if (sc !== 1 || o.dx || px || py) {
+    c.translate(w / 2 + o.dx + px, h / 2 + py); c.scale(sc, sc); c.translate(-w / 2, -h / 2);
   }
   const jx = t.shake ? (Math.random() - 0.5) * R.u / 240 : 0, jy = t.shake ? (Math.random() - 0.5) * R.u / 180 : 0;
   if (t.layout) {
@@ -1477,33 +1515,60 @@ function drawMedia(R, src, o) {
     const fit = R.s.fit;
     if (fit === 'blur' && Math.abs(vw / vh - w / h) > 0.05) blurBg(R, src);
     const k = fit === 'cover' ? Math.max(w / vw, h / vh) : Math.min(w / vw, h / vh);
-    c.drawImage(src, (w - vw * k) / 2 + jx, (h - vh * k) / 2 + jy, vw * k, vh * k);
+    if (o.blur) {
+      // ぼかしながら重ねる切り替え用：縮小→拡大でぼかした絵を描く
+      blurA.width = 48; blurA.height = Math.max(1, Math.round(48 * h / w));
+      blurA.getContext('2d').drawImage(src, (w - vw * k) / 2 * 48 / w, (h - vh * k) / 2 * 48 / w, vw * k * 48 / w, vh * k * 48 / w);
+      c.imageSmoothingQuality = 'high';
+      c.drawImage(blurA, 0, 0, w, h);
+    } else {
+      c.drawImage(src, (w - vw * k) / 2 + jx, (h - vh * k) / 2 + jy, vw * k, vh * k);
+    }
   }
   c.restore();
 }
 
-// 各アイテムの「入り」と「抜け」の進み具合（0〜1）
+// 各アイテムの「入り」と「抜け」の進み具合（0〜1）。切り替えの種類はアイテムごと
 function phases(g, local, s) {
-  let pin = 1, pout = 1;
-  if (OVERLAP.has(s.trans)) {
-    if (g.overlap) pin = clamp(local / g.overlap, 0, 1);
-    if (g.nextOverlap) pout = clamp((g.len - local) / g.nextOverlap, 0, 1);
-  } else if (s.trans === 'black' || s.trans === 'white') {
-    const f = Math.min(s.td / 2, g.len / 3);
-    if (g.i > 0) pin = clamp(local / f, 0, 1);
-    if (!g.last) pout = clamp((g.len - local) / f, 0, 1);
-  }
+  const edge = (tr, ov, t, first) => {
+    if (!tr || tr === 'none' || first) return 1;
+    if (OVERLAP.has(tr)) return ov ? clamp(t / ov, 0, 1) : 1;
+    if (DIP.has(tr)) return clamp(t / Math.min(s.td / 2, g.len / 3), 0, 1);
+    return 1;
+  };
+  const pin = edge(g.transIn, g.overlap, local, g.i === 0);
+  const pout = edge(g.transOut, g.nextOverlap, g.len - local, g.last);
   return { pin, pout, vis: Math.min(pin, pout) };
 }
 
-function transformFor(s, ph) {
-  const o = { alpha: 1, scale: 1, dx: 0 };
-  switch (s.trans) {
-    case 'cross': case 'glitch': o.alpha = ph.pin; break;
-    case 'zoom': o.alpha = ph.pin; o.scale = 1 + 0.3 * (1 - E.out(ph.pin)) + 0.3 * (1 - E.out(ph.pout)); break;
-    case 'slide': o.dx = (1 - E.inOut(ph.pin)) - (1 - E.inOut(ph.pout)); break;
+function transformFor(g, ph) {
+  const o = { alpha: 1, scale: 1, dx: 0, speed: 0 };
+  const a = smooth(ph.pin), b = smooth(ph.pout);
+  switch (g.transIn) {
+    case 'cross': case 'glitch': case 'leak': o.alpha = a; break;
+    case 'zoom': o.alpha = Math.min(1, ph.pin * 2); o.scale += 0.35 * (1 - E.out(ph.pin)); break;
+    case 'slide': o.dx += 1 - a; o.speed = Math.max(o.speed, 1 - Math.abs(2 * ph.pin - 1)); break;
+    case 'whip': o.dx += 1 - a; o.speed = Math.max(o.speed, 2 * (1 - Math.abs(2 * ph.pin - 1))); break;
+  }
+  switch (g.transOut) {
+    case 'zoom': o.scale += 0.35 * (1 - b); break;
+    case 'slide': o.dx -= 1 - b; o.speed = Math.max(o.speed, 1 - Math.abs(2 * ph.pout - 1)); break;
+    case 'whip': o.dx -= 1 - b; o.speed = Math.max(o.speed, 2 * (1 - Math.abs(2 * ph.pout - 1))); break;
   }
   return o;
+}
+
+// 光が差し込む切り替え（フィルムの光漏れ）
+function lightLeak(R, k, seed) {
+  if (k <= 0.01) return;
+  const { w, h } = R, x = w * (0.2 + 0.6 * ((seed * 0.37) % 1)), y = h * (0.3 + 0.4 * ((seed * 0.71) % 1));
+  op(R, 'screen', Math.min(1, k * 1.2), (c) => {
+    for (const [dx, dy, r, col] of [[0, 0, 0.9, '255,160,70'], [0.35, -0.2, 0.6, '255,90,60'], [-0.3, 0.25, 0.7, '255,220,150']]) {
+      const g = c.createRadialGradient(x + dx * w * k, y + dy * h, 0, x + dx * w * k, y + dy * h, Math.max(w, h) * r);
+      g.addColorStop(0, `rgba(${col},.95)`); g.addColorStop(1, `rgba(${col},0)`);
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+    }
+  });
 }
 
 // active: [{ g, src, local }]
@@ -1516,16 +1581,26 @@ function renderFrame(R, active, frameT, total) {
 
   for (const a of active) {
     a.ph = phases(a.g, a.local, s);
-    const tr = transformFor(s, a.ph);
+    const tr = transformFor(a.g, a.ph);
     tr.dx *= R.w;
     if (a.g.kind === 'card') {
       c.save();
       if (tr.scale !== 1 || tr.dx) { c.translate(R.w / 2 + tr.dx, R.h / 2); c.scale(tr.scale, tr.scale); c.translate(-R.w / 2, -R.h / 2); }
       t.card(R, a.g, a.local, tr.alpha);
       c.restore();
-    } else {
-      drawMedia(R, a.src, { ...tr, idx: a.g.idx, clip: a.g.clip, local: a.local });
+      continue;
     }
+    const base = { ...tr, idx: a.g.idx, clip: a.g.clip, local: a.local, len: a.g.len };
+    if (tr.speed > 0.05) {
+      // 横に流れる切り替えは残像（モーションブラー）をつけて自然に
+      const n = 4, spread = R.w * 0.05 * tr.speed;
+      for (let i = 0; i < n; i++) drawMedia(R, a.src, { ...base, dx: tr.dx + (i - (n - 1) / 2) * spread / n, alpha: tr.alpha * (i === 0 ? 1 : 0.45) });
+    } else {
+      drawMedia(R, a.src, base);
+    }
+    // ぼかしながら重ねる切り替え
+    if (a.g.transIn === 'blur' && a.ph.pin < 1) drawMedia(R, a.src, { ...base, blur: true, alpha: 1 - smooth(a.ph.pin) });
+    if (a.g.transOut === 'blur' && a.ph.pout < 1) drawMedia(R, a.src, { ...base, blur: true, alpha: 1 - smooth(a.ph.pout) });
   }
 
   t.grade(R, frameT);
@@ -1533,27 +1608,48 @@ function renderFrame(R, active, frameT, total) {
 
   for (const a of active) {
     if (a.g.kind !== 'clip') continue;
-    const vis = s.trans === 'slide' ? 1 : a.ph.vis;
+    const slid = a.g.transIn === 'slide' || a.g.transIn === 'whip';
+    const vis = slid ? a.ph.pout : a.ph.vis;
     t.caption(R, a.g.clip, vis, a.local);
     if (a.g.clip.showDate) t.date(R, a.g.clip, vis, a.local);
+    if (a.g.chapter && a.local < 3) drawChapter(R, a.g.chapter, a.local, vis);
   }
 
-  if (s.trans === 'black' || s.trans === 'white') {
-    const vis = active.length ? Math.max(...active.map(a => a.ph.vis)) : 0;
-    if (vis < 1) op(R, 'source-over', 1 - vis, () => fill(R, s.trans === 'white' ? '#fff' : '#000'));
+  // 暗転・白フラッシュ・グリッチ・光漏れは、切り替え中のアイテムにだけかける
+  let black = 0, white = 0, gl = 0, leak = 0, seed = 0;
+  for (const a of active) {
+    const pairs = [[a.g.transIn, a.ph.pin], [a.g.transOut, a.ph.pout]];
+    for (const [tr, p] of pairs) {
+      if (p >= 1) continue;
+      if (tr === 'black') black = Math.max(black, 1 - smooth(p));
+      if (tr === 'white') white = Math.max(white, 1 - smooth(p));
+      if (tr === 'glitch') gl = Math.max(gl, 1 - p);
+      if (tr === 'leak') { leak = Math.max(leak, 1 - Math.abs(2 * (tr === a.g.transIn ? p : 1 - p) - 1)); seed = a.g.i + 1; }
+    }
   }
-  if (s.trans === 'glitch') {
-    const k = active.length > 1 ? 1 : Math.max(0, ...active.map(a => 1 - a.ph.vis));
-    if (k > 0.02) { glitch(R, k); if (k > 0.3) chroma(R, R.w / 60 * k); }
-  }
+  if (black > 0) op(R, 'source-over', black, () => fill(R, '#000'));
+  if (white > 0) op(R, 'source-over', white, () => fill(R, '#fff'));
+  if (gl > 0.02) { glitch(R, gl); if (gl > 0.3) chroma(R, R.w / 60 * gl); }
+  if (leak > 0) lightLeak(R, leak, seed);
 
   t.hud(R, frameT, active);
   if (!t.noTitle) t.title(R, frameT);
 
   if (total) {
-    const edge = clamp(Math.min(frameT / 0.4, (total - frameT) / 1), 0, 1);
-    if (edge < 1) op(R, 'source-over', 1 - edge, () => fill(R, '#000'));
+    const edge = clamp(Math.min(frameT / 0.5, (total - frameT) / 1.2), 0, 1);
+    if (edge < 1) op(R, 'source-over', 1 - smooth(edge), () => fill(R, '#000'));
   }
+}
+
+// 日付が変わった最初のカットに入れる見出し（DAY 2・9月27日）
+function drawChapter(R, ch, local, vis) {
+  const a = vis * clamp(Math.min(local / 0.5, (3 - local) / 0.6), 0, 1);
+  if (a <= 0) return;
+  const u = R.u, x = u * 0.07, y = Math.max(R.bar, 0) + u * 0.12;
+  const font = R.tpl.font === 'mono' ? 'mono' : R.tpl.font === 'serif' ? 'serif' : 'sans';
+  txt(R, ch.title, x, y, u * 0.03, { align: 'left', font, alpha: a, spacing: u * 0.012, weight: 700, color: 'rgba(255,255,255,.85)' });
+  op(R, 'source-over', a * 0.9, (c) => { c.fillStyle = '#f0b46a'; c.fillRect(x, y + u * 0.03, u * 0.12 * Math.min(1, local / 0.6), Math.max(1, u * 0.004)); });
+  txt(R, ch.sub, x, y + u * 0.075, u * 0.05, { align: 'left', font, alpha: a, weight: 700, anim: 'slide', local });
 }
 
 // ---------- 設定・タイムライン ----------
@@ -1574,11 +1670,15 @@ function settings(overrideTpl) {
     w: Math.round(aw * scale / 2) * 2, h: Math.round(ah * scale / 2) * 2,
     trans: $('trans').value === 'auto' ? t.trans : $('trans').value,
     td: $('td').value === 'auto' ? t.td : Number($('td').value),
+    transMode: $('transMode').value === 'auto' ? (t.transMode || 'scene') : $('transMode').value,
+    chapters: $('chapters').value === 'on',
     fit: $('fit').value, title: $('title').value.trim(), dfmt: $('dfmt').value, dpos: $('dpos').value,
     bgmVol: +$('bgmVol').value, origVol: +$('origVol').value,
     bgmName: bgmFiles[0] ? bgmFiles[0].name.replace(/\.[^.]+$/, '') : '',
   };
 }
+
+const dayKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
 function timeline() {
   const s = settings();
@@ -1586,14 +1686,36 @@ function timeline() {
   let items = segs.filter(g => g.out - g.in > 0.1)
     .map((g, idx) => ({ kind: 'clip', clip: g, len: g.len, idx }));
   if (items.length && t.cards) items = t.cards(items, s);
+
+  // 日付の見出し：複数の日にまたがる時だけ、日が変わった最初のカットに付ける
+  const days = [...new Set(items.filter(g => g.kind === 'clip').map(g => dayKey(g.clip.date)))];
+  let prevDay = null;
+  for (const g of items) {
+    if (g.kind !== 'clip') continue;
+    const k = dayKey(g.clip.date);
+    g.chapter = s.chapters && days.length > 1 && k !== prevDay
+      ? { title: `DAY ${days.indexOf(k) + 1}`, sub: fmtDate(g.clip.date, 'jp').replace(/^\d+年/, '') } : null;
+    prevDay = k;
+  }
+
+  // 切り替えの入れ方：プロは同じ場面の中はカットでつなぎ、場面（時間・場所）が変わる所だけ演出を入れる
   let time = 0;
   items.forEach((g, i) => {
-    let overlap = 0;
-    if (i > 0 && OVERLAP.has(s.trans)) overlap = Math.min(s.td, g.len / 2, items[i - 1].len / 2);
+    const p = items[i - 1];
+    let tr = 'none';
+    if (p) {
+      const scene = g.kind !== 'clip' || p.kind !== 'clip' ||
+        (g.clip.src !== p.clip.src && Math.abs(g.clip.date - p.clip.date) > SCENE_GAP) || !!g.chapter;
+      tr = s.transMode === 'every' || scene ? s.trans : 'cut';
+      p.transOut = tr;
+    }
+    g.transIn = tr;
+    const overlap = p && OVERLAP.has(tr) ? Math.min(s.td, g.len / 2, p.len / 2) : 0;
     time -= overlap;
     Object.assign(g, { start: time, overlap, i, last: i === items.length - 1 });
     time += g.len;
   });
+  if (items.length) items[items.length - 1].transOut = 'none';
   items.forEach((g, i) => { g.nextOverlap = items[i + 1] ? items[i + 1].overlap : 0; });
   return { segs: items, total: time, s };
 }
@@ -1638,8 +1760,8 @@ function saveProject() {
   saveTimer = setTimeout(() => {
     if (restoring || !booted) return;
     const project = {
-      v: 1, nextId, tplId, mode, view: document.body.classList.contains('result') ? 'result' : 'setup', tlManual, galleryCat,
-      settings: Object.fromEntries(['target', 'pace', 'aspect', 'height', 'fit', 'trans', 'td', 'title', 'dfmt', 'dpos', 'bgmVol', 'origVol'].map(id => [id, $(id).value])),
+      v: 1, nextId, tplId, mode, lastEdit, view: document.body.classList.contains('result') ? 'result' : 'setup', tlManual, galleryCat,
+      settings: Object.fromEntries(['target', 'pace', 'aspect', 'height', 'fit', 'trans', 'td', 'transMode', 'order', 'chapters', 'title', 'dfmt', 'dpos', 'bgmVol', 'origVol'].map(id => [id, $(id).value])),
       clips: clips.map(c => ({ id: c.id, name: c.name, type: c.type, duration: c.duration, w: c.w, h: c.h, date: c.date.getTime(), dateSource: c.dateSource,
         include: c.include, thumb: c.thumb, strip: c.strip, scores: c.scores, step: c.step })),
       segs: segs.map(g => ({ id: g.id, src: g.src.id, in: g.in, out: g.out, speed: g.speed, caption: g.caption, showDate: g.showDate, mute: g.mute })),
@@ -1671,6 +1793,7 @@ async function restoreProject() {
     galleryCat = p.galleryCat || 'all';
     nextId = p.nextId || nextId;
     tlManual = !!p.tlManual;
+    lastEdit = p.lastEdit || null;
     const byId = {};
     for (const [i, m] of p.clips.entries()) {
       showBusy('前回の続きを復元しています', `${i + 1} / ${p.clips.length}本`, i / p.clips.length);
@@ -2159,9 +2282,141 @@ function fitExact(target) {
   return Math.abs(target - timeline().total) < 0.1;
 }
 
+// 素材の並び順：撮影した順（プロの基本は時系列）
+function orderedSources() {
+  const src = clips.filter(c => c.include);
+  return $('order').value === 'chrono' ? [...src].sort((a, b) => a.date - b.date) : src;
+}
+
+// いちばん落ち着いた区間（オープニングやラストの「引きの絵」に使う）
+function calmWindow(c, L) {
+  if (!c.scores || L >= c.duration - 0.2) return null;
+  const w = Math.max(1, Math.round(L / c.step)), n = c.scores.length;
+  const from = Math.min(n - w, Math.ceil(0.5 / c.step));
+  let best = -1, bestAt = from;
+  for (let i = from; i + w <= n; i++) {
+    let s = 0; for (let j = i; j < i + w; j++) s += c.scores[j];
+    if (best < 0 || s < best) { best = s; bestAt = i; }
+  }
+  const a = clamp(bestAt * c.step, 0, c.duration - L);
+  return [a, a + L];
+}
+
+// 起承転結：始まりは長め → 中盤は普通 → 盛り上がりは短く畳みかけ → ラストは長めに余韻
+function shapeArc() {
+  const n = segs.length;
+  if (n < 4) return;
+  segs.forEach((g, i) => {
+    const pos = i / (n - 1);
+    const f = i === 0 ? 1.35 : i === n - 1 ? 1.6 : pos > 0.55 && pos < 0.9 ? 0.72 : 1;
+    const len = (g.out - g.in) * f;
+    g.out = Math.min(g.duration, g.in + len);
+    g.in = Math.max(0, g.out - len);
+  });
+  // 1本から1カットだけ使う素材なら、最初と最後は落ち着いた区間に差し替える
+  for (const g of [segs[0], segs[n - 1]]) {
+    if (segs.filter(x => x.src === g.src).length !== 1) continue;
+    const w = calmWindow(g.src, g.out - g.in);
+    if (w) [g.in, g.out] = w;
+  }
+}
+
+// BGMのテンポ（BPM）と拍の位置を解析する
+const beatCache = {};
+async function analyzeBgm(file) {
+  const key = `${file.name}:${file.size}`;
+  if (key in beatCache) return beatCache[key];
+  beatCache[key] = null;
+  try {
+    const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const ab = await new Ctx(1, 22050, 22050).decodeAudioData(await file.arrayBuffer());
+    const sr = ab.sampleRate, d = ab.getChannelData(0), N = Math.min(d.length, sr * 90), hop = 256;
+    const env = [];
+    let prev = 0;
+    for (let i = 0; i + hop <= N; i += hop) {
+      let e = 0;
+      for (let j = i; j < i + hop; j++) e += d[j] * d[j];
+      e = Math.sqrt(e / hop);
+      env.push(Math.max(0, e - prev));
+      prev = e;
+    }
+    const fps = sr / hop;
+    const at = (x) => { const i = Math.floor(x), f = x - i; return (env[i] || 0) * (1 - f) + (env[i + 1] || 0) * f; };
+    // 自己相関でテンポを探す（半端な周期も補間して、±0.5BPM以内まで追い込む）
+    const score = (bpm) => {
+      const lag = fps * 60 / bpm;
+      let sum = 0, n = 0;
+      for (let i = 0; i + lag * 2 < env.length; i++) { sum += env[i] * (at(i + lag) + 0.5 * at(i + lag * 2)); n++; }
+      return n ? sum / n : 0;
+    };
+    let best = 0, bestBpm = 0;
+    for (let bpm = 70; bpm <= 180; bpm += 0.5) {
+      const v = score(bpm) * (bpm >= 85 && bpm <= 160 ? 1.1 : 1); // 自然なテンポ帯を少し優先
+      if (v > best) { best = v; bestBpm = bpm; }
+    }
+    for (let bpm = bestBpm - 0.5; bpm <= bestBpm + 0.5; bpm += 0.05) {
+      const v = score(bpm) * (bpm >= 85 && bpm <= 160 ? 1.1 : 1);
+      if (v > best) { best = v; bestBpm = bpm; }
+    }
+    if (!bestBpm) return null;
+    const lag = fps * 60 / bestBpm;
+    let bestOff = 0, bestSum = -1;
+    for (let k = 0; k < lag; k += 0.25) {
+      let sum = 0;
+      for (let i = k; i < env.length; i += lag) sum += at(i);
+      if (sum > bestSum) { bestSum = sum; bestOff = k; }
+    }
+    // 実際の拍（音の立ち上がりのピーク）を1つずつ探し、直線を当てはめてテンポと位置を正確にする
+    const xs = [], ys = [];
+    for (let k = 0, x = bestOff; x < env.length; k++, x += lag) {
+      let bi = -1, bv = 0;
+      for (let i = Math.max(0, Math.round(x - lag / 4)); i <= Math.min(env.length - 1, Math.round(x + lag / 4)); i++) if (env[i] > bv) { bv = env[i]; bi = i; }
+      if (bi >= 0 && bv > 0) { xs.push(k); ys.push(bi); }
+    }
+    if (xs.length > 8) {
+      const n = xs.length, mx = xs.reduce((a, b) => a + b) / n, my = ys.reduce((a, b) => a + b) / n;
+      let sxy = 0, sxx = 0;
+      for (let i = 0; i < n; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sxx += (xs[i] - mx) ** 2; }
+      const slope = sxy / sxx;
+      if (Math.abs(slope - lag) < lag * 0.05) {
+        bestBpm = fps * 60 / slope;
+        bestOff = ((my - slope * mx) % slope + slope) % slope;
+      }
+    }
+    // 音量の差分は音の立ち上がりより少し遅れて出るので、半フレームぶん前へ
+    bestOff = Math.max(0, bestOff - 0.5);
+    return (beatCache[key] = { bpm: bestBpm, period: 60 / bestBpm, offset: bestOff / fps });
+  } catch {
+    return null;
+  }
+}
+
+// カットの切れ目をBGMの拍に合わせる（最後のカットで全体の長さを調整）
+function snapToBeats(beat, target) {
+  for (let i = 1; i < 200; i++) {
+    const items = timeline().segs;
+    if (i >= items.length) break;
+    const g = items[i], prev = items[i - 1];
+    if (prev.kind !== 'clip') continue;
+    const seg = prev.clip;
+    let q = beat.offset + Math.round((g.start - beat.offset) / beat.period) * beat.period;
+    // 伸ばす余裕がない時は、1拍前まで縮めて拍に合わせる
+    if (q > g.start && (seg.out + (q - g.start) * seg.speed) > seg.duration) q -= beat.period;
+    if (q < g.start && (seg.out + (q - g.start) * seg.speed) < seg.in + 0.4) q += beat.period;
+    seg.out = clamp(seg.out + (q - g.start) * seg.speed, seg.in + 0.4, seg.duration);
+  }
+  if (target) {
+    const last = segs[segs.length - 1];
+    const diff = target - timeline().total;
+    if (last) last.out = clamp(last.out + diff * last.speed, last.in + 0.4, last.duration);
+  }
+}
+
+let lastEdit = null; // 「どんなプロの技を使ったか」の表示用
+
 async function autoEdit() {
   const target = targetLen();
-  const src = clips.filter(c => c.include);
+  const src = orderedSources();
   if (!src.length || !target) return;
   $('autoBtn').disabled = true;
   try {
@@ -2170,6 +2425,11 @@ async function autoEdit() {
         setStatus(`見どころを探しています ${i + 1} / ${src.length}（${Math.round(p * 100)}%）`);
         showBusy('見どころを探しています', `${i + 1} / ${src.length}本目`, (i + p) / src.length);
       });
+    }
+    let beat = null;
+    if (bgmFiles.length) {
+      showBusy('BGMのテンポを解析しています', bgmFiles[0].name, null);
+      beat = await analyzeBgm(bgmFiles[0]);
     }
     const pace = $('pace').value === 'auto' ? (TPL[tplId].pace || 'normal') : $('pace').value;
     const w = src.map(c => Math.sqrt(c.duration));
@@ -2186,7 +2446,10 @@ async function autoEdit() {
       budget += target - total;
       if (budget <= 1) break;
     }
-    const ok = fitExact(target);
+    shapeArc();
+    let ok = fitExact(target);
+    if (beat) { snapToBeats(beat, target); ok = Math.abs(timeline().total - target) < 0.3; }
+    lastEdit = { beat, chrono: $('order').value === 'chrono', arc: segs.length >= 4 };
     tlManual = false;
     selectSeg(segs[0] || null);
     renderLibrary();
@@ -2336,7 +2599,7 @@ function refresh() {
   if (mode === 'easy') renderEasy();
 }
 
-['trans', 'td'].forEach(id => $(id).addEventListener('change', () => { keepTarget(); refresh(); }));
+['trans', 'td', 'transMode', 'chapters'].forEach(id => $(id).addEventListener('change', () => { keepTarget(); refresh(); }));
 ['aspect', 'height', 'fit', 'dfmt', 'dpos'].forEach(id => $(id).addEventListener('change', refresh));
 $('title').addEventListener('input', () => drawStill());
 $('title').addEventListener('change', refresh);
@@ -2377,6 +2640,8 @@ function renderEasy() {
   markChips('eLen2', $('target').value);
   markChips('eShape', $('aspect').value);
   markChips('eCat', galleryCat);
+  document.querySelector('#eOpts [data-k="order"]').classList.toggle('on', $('order').value === 'chrono');
+  document.querySelector('#eOpts [data-k="chapters"]').classList.toggle('on', $('chapters').value === 'on');
   const th = $('eThumbs');
   if (th.dataset.n !== clips.map(c => c.id).join()) {
     th.dataset.n = clips.map(c => c.id).join();
@@ -2409,6 +2674,16 @@ function renderEasy() {
   markChips('eTplRow', tplId);
   const { total } = timeline();
   $('eInfo').textContent = segs.length ? `${TPL[tplId].name} ・ ${segs.length}カット ・ ${fmtT(total)}` : '';
+  const tags = [];
+  if (lastEdit && lastEdit.chrono) tags.push('撮影した順');
+  if (lastEdit && lastEdit.arc) tags.push('起承転結のカット配分');
+  if (lastEdit && lastEdit.beat) tags.push(`BGMの拍に合わせたカット（${Math.round(lastEdit.beat.bpm)} BPM）`);
+  const st = settings();
+  tags.push(st.transMode === 'every' ? '毎カットに切り替え効果' : '場面の変わり目だけ切り替え効果');
+  if (TPL[tplId].drift !== false) tags.push('ゆっくりズーム');
+  tags.push('音のなめらかなつなぎ');
+  if (bgmFiles.length) tags.push('声が入るとBGMを自動で下げる');
+  $('eSkills').innerHTML = segs.length ? tags.map(t => `<span>✓ ${t}</span>`).join('') : '';
 }
 
 // iPhoneで音付き再生を許可してもらうため、タップの瞬間に再生要素を一度鳴らしておく
@@ -2434,7 +2709,8 @@ async function buildMovie() {
   if (targetLen()) {
     await autoEdit();
   } else {
-    segs = clips.filter(c => c.include).map(c => makeSeg(c, 0, c.duration));
+    segs = orderedSources().map(c => makeSeg(c, 0, c.duration));
+    lastEdit = { chrono: $('order').value === 'chrono' };
     selectSeg(segs[0] || null);
   }
   refresh();
@@ -2447,6 +2723,11 @@ $('eTitle').addEventListener('input', () => { $('title').value = $('eTitle').val
 $('eTitle').addEventListener('change', refresh);
 $('title').addEventListener('input', () => { $('eTitle').value = $('title').value; });
 $('eBgm').onclick = () => $('bgm').click();
+document.querySelectorAll('#eOpts button').forEach(b => b.onclick = () => {
+  const k = b.dataset.k;
+  $(k).value = k === 'order' ? ($(k).value === 'chrono' ? 'manual' : 'chrono') : ($(k).value === 'on' ? 'off' : 'on');
+  refresh();
+});
 $('resetAll').onclick = $('resetAll2').onclick = resetProject;
 
 $('eStart').onclick = async () => {
@@ -2478,7 +2759,8 @@ $('ePro').onclick = () => { stopPreview(); setMode('pro'); };
 $('toEasy').onclick = () => { stopPreview(); setMode('easy', segs.length ? 'result' : 'setup'); };
 
 // ---------- 再生・書き出し ----------
-let audioCtx = null, master = null, recDest = null, bgmEl = null, bgmGain = null;
+let audioCtx = null, master = null, recDest = null, bgmEl = null, bgmGain = null, duckGain = null, origBus = null, origMeter = null;
+const meterBuf = new Float32Array(1024);
 const players = [];
 
 function ensureAudio() {
@@ -2490,6 +2772,12 @@ function ensureAudio() {
   master.connect(recDest);
   // 映像と音を別の要素で再生する。映像はミュート（iPhoneでも自由に再生できる）、
   // 音は同じファイルを<audio>で鳴らしてミキサーへ。音側で何かあっても映像は止まらない
+  // 元の音はまとめて1本のバスに通し、音量を測ってBGMを下げる（ダッキング）
+  origBus = audioCtx.createGain();
+  origBus.connect(master);
+  origMeter = audioCtx.createAnalyser();
+  origMeter.fftSize = 1024;
+  origBus.connect(origMeter);
   for (let i = 0; i < 3; i++) {
     const v = document.createElement('video');
     v.muted = true;
@@ -2503,13 +2791,14 @@ function ensureAudio() {
     $('hidden').appendChild(a);
     const gain = audioCtx.createGain();
     gain.gain.value = 0;
-    audioCtx.createMediaElementSource(a).connect(gain).connect(master);
+    audioCtx.createMediaElementSource(a).connect(gain).connect(origBus);
     players.push({ v, a, gain, seg: null, ready: false, token: 0 });
   }
   bgmEl = new Audio();
   $('hidden').appendChild(bgmEl);
   bgmGain = audioCtx.createGain();
-  audioCtx.createMediaElementSource(bgmEl).connect(bgmGain).connect(master);
+  duckGain = audioCtx.createGain();
+  audioCtx.createMediaElementSource(bgmEl).connect(bgmGain).connect(duckGain).connect(master);
 }
 
 async function prepare(p, g) {
@@ -2762,9 +3051,21 @@ function run({ record }) {
       }
       renderFrame(R, active, frameT, total);
       for (const a of active) {
-        if (a.g.kind === 'clip') a.g.player.gain.gain.value = a.g.clip.mute ? 0 : s.origVol * a.ph.vis;
+        if (a.g.kind !== 'clip') continue;
+        // カットの切れ目は音を一瞬だけフェードして「ブツッ」を防ぐ
+        const fin = a.g.transIn === 'cut' ? clamp(a.local / 0.06, 0, 1) : a.ph.pin;
+        let fout = a.g.transOut === 'cut' ? clamp((a.g.len - a.local) / 0.06, 0, 1) : a.ph.pout;
+        if (a.g.last) fout = Math.min(fout, clamp((a.g.len - a.local) / 1.2, 0, 1));
+        a.g.player.gain.gain.setTargetAtTime(a.g.clip.mute ? 0 : s.origVol * Math.min(fin, fout), audioCtx.currentTime, 0.012);
       }
 
+      // 元の音（声など）が大きい所ではBGMを自動で下げる
+      if (bgmUrls.length) {
+        origMeter.getFloatTimeDomainData(meterBuf);
+        let e = 0; for (let i = 0; i < meterBuf.length; i++) e += meterBuf[i] * meterBuf[i];
+        const loud = Math.sqrt(e / meterBuf.length) > 0.04;
+        duckGain.gain.setTargetAtTime(loud ? 0.35 : 1, audioCtx.currentTime, loud ? 0.08 : 0.4);
+      }
       $('prog').value = frameT / total;
       setStatus(`${record ? '書き出し中' : '再生中'} ${fmtT(frameT)} / ${fmtT(total)}`);
       if (t >= total) return finish();
