@@ -234,7 +234,7 @@
       <div class="hero">
         <h1 class="brand">Tsumugi<span>つむぎ</span></h1>
         <p>思い出の動画を、1本のムービーにつむぐ。<br>動画をえらんで、長さとテンプレを決めるだけです。</p>
-        <p class="ver">ver 15 ・ night　<button class="linkbtn" id="resetAll" hidden>最初からやり直す</button></p>
+        <p class="ver">ver 16 ・ night　<button class="linkbtn" id="resetAll" hidden>最初からやり直す</button></p>
       </div>
       <div class="panel step">
         <h2><b>1</b>動画をえらぶ <span id="eCount" class="count"></span></h2>
@@ -255,11 +255,15 @@
         <h2><b>2</b>長さと形をえらぶ</h2>
         <p class="label">仕上がりの長さ</p>
         <div class="chips" id="eLen">
-          <button data-v="15">15秒</button><button data-v="30">30秒</button><button data-v="60">1分</button><button data-v="90">1分30秒</button><button data-v="none">全部つなぐ</button>
+          <button data-v="15">15秒</button><button data-v="30">30秒</button><button data-v="60">1分</button><button data-v="90">1分30秒</button><button data-v="120">2分</button><button data-v="180">3分</button><button data-v="300">5分</button><button data-v="none">全部つなぐ</button>
         </div>
         <p class="label">画面の形</p>
         <div class="chips" id="eShape">
           <button data-v="auto">おまかせ</button><button data-v="9:16">縦 9:16<small>TikTok・ストーリー</small></button><button data-v="16:9">横 16:9<small>YouTube</small></button><button data-v="1:1">正方形</button>
+        </div>
+        <p class="label">画質</p>
+        <div class="chips" id="eQual">
+          <button data-v="720">標準<small>720p・早い</small></button><button data-v="1080">高画質<small>1080p</small></button><button data-v="1440">最高画質<small>1440p・重い</small></button>
         </div>
         <p class="label">編集のしかた</p>
         <div class="chips small" id="eOpts">
@@ -297,7 +301,7 @@
         <div class="chips scroll" id="eTplRow"></div>
         <p class="label">長さを変える</p>
         <div class="chips" id="eLen2">
-          <button data-v="15">15秒</button><button data-v="30">30秒</button><button data-v="60">1分</button><button data-v="90">1分30秒</button><button data-v="none">全部</button>
+          <button data-v="15">15秒</button><button data-v="30">30秒</button><button data-v="60">1分</button><button data-v="90">1分30秒</button><button data-v="120">2分</button><button data-v="180">3分</button><button data-v="300">5分</button><button data-v="none">全部</button>
         </div>
         <div class="btns" style="margin-top:16px">
           <button class="btn" id="eBack">← 動画・設定を変える</button>
@@ -331,7 +335,9 @@
             <option value="45">45秒</option>
             <option value="60">1分</option>
             <option value="90">1分30秒</option>
+            <option value="120">2分</option>
             <option value="180">3分</option>
+            <option value="300">5分</option>
           </select></div>
         <div class="row"><label for="pace">カットの長さ</label>
           <select id="pace">
@@ -477,8 +483,9 @@
           </select></div>
         <div class="row"><label for="height">画質</label>
           <select id="height">
-            <option value="720">720p（軽い）</option>
-            <option value="1080">1080p（きれい）</option>
+            <option value="720">標準（720p・軽い）</option>
+            <option value="1080">高画質（1080p）</option>
+            <option value="1440">最高画質（1440p・重い）</option>
           </select></div>
         <div class="row"><label for="fit">向きが違う時</label>
           <select id="fit">
@@ -2639,6 +2646,7 @@ function renderEasy() {
   markChips('eLen', $('target').value);
   markChips('eLen2', $('target').value);
   markChips('eShape', $('aspect').value);
+  markChips('eQual', $('height').value);
   markChips('eCat', galleryCat);
   document.querySelector('#eOpts [data-k="order"]').classList.toggle('on', $('order').value === 'chrono');
   document.querySelector('#eOpts [data-k="chapters"]').classList.toggle('on', $('chapters').value === 'on');
@@ -2673,7 +2681,8 @@ function renderEasy() {
   }
   markChips('eTplRow', tplId);
   const { total } = timeline();
-  $('eInfo').textContent = segs.length ? `${TPL[tplId].name} ・ ${segs.length}カット ・ ${fmtT(total)}` : '';
+  const short = targetLen() && total < targetLen() - 1;
+  $('eInfo').textContent = segs.length ? `${TPL[tplId].name} ・ ${segs.length}カット ・ ${fmtT(total)}${short ? `（動画の合計が${fmtT(targetLen())}に足りないため短めです）` : ''}` : '';
   const tags = [];
   if (lastEdit && lastEdit.chrono) tags.push('撮影した順');
   if (lastEdit && lastEdit.arc) tags.push('起承転結のカット配分');
@@ -2718,6 +2727,7 @@ async function buildMovie() {
 
 document.querySelectorAll('#eLen button').forEach(b => b.onclick = () => { $('target').value = b.dataset.v; refresh(); });
 document.querySelectorAll('#eShape button').forEach(b => b.onclick = () => { $('aspect').value = b.dataset.v; refresh(); });
+document.querySelectorAll('#eQual button').forEach(b => b.onclick = () => { $('height').value = b.dataset.v; refresh(); });
 document.querySelectorAll('#eCat button').forEach(b => b.onclick = () => { galleryCat = b.dataset.v; refresh(); });
 $('eTitle').addEventListener('input', () => { $('title').value = $('eTitle').value; });
 $('eTitle').addEventListener('change', refresh);
@@ -2921,7 +2931,8 @@ function run({ record }) {
     if (record) {
       const stream = cv.captureStream(FPS);
       recDest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
-      recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: s.h >= 1080 ? 10e6 : 5e6 });
+      const px = Math.min(s.w, s.h);
+      recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: px >= 1440 ? 24e6 : px >= 1080 ? 14e6 : 6e6 });
       recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
     }
 
