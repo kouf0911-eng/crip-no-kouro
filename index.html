@@ -182,6 +182,19 @@
   #eResult { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
   #eResult a { color: var(--accent); font-weight: 600; }
 
+  .vh { position: fixed; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  label.pick { display: flex; align-items: center; justify-content: center; text-align: center; -webkit-user-select: none; user-select: none; }
+  #busy { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(6,8,12,.6);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  #busy[hidden] { display: none; }
+  .busybox { width: min(320px, 86vw); padding: 22px 20px; border-radius: 18px; background: rgba(22,26,36,.9); border: 1px solid var(--line);
+    display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .busybox b { font-size: 16px; }
+  .busybox span { font-size: 12px; color: var(--muted); min-height: 1em; word-break: break-all; }
+  .busybox progress { width: 100%; height: 6px; accent-color: var(--accent); }
+  .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(240,180,106,.25); border-top-color: var(--accent); animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
   /* 下部タブ */
   nav.tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: rgba(12,15,22,.78); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
     border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, 1fr);
@@ -212,13 +225,13 @@
       <div class="hero">
         <h1 class="brand">Tsumugi<span>つむぎ</span></h1>
         <p>思い出の動画を、1本のムービーにつむぐ。<br>動画をえらんで、長さとテンプレを決めるだけです。</p>
-        <p class="ver">ver 7 ・ night</p>
+        <p class="ver">ver 8 ・ night</p>
       </div>
       <div class="panel step">
         <h2><b>1</b>動画をえらぶ <span id="eCount" class="count"></span></h2>
         <div id="eThumbs"></div>
-        <button class="btn primary big" id="eAdd">＋ 写真アプリから動画をえらぶ</button>
-        <p class="hint">最大15本まで。何回かに分けて追加しても大丈夫です。</p>
+        <label for="files" class="btn primary big pick" id="eAdd" role="button">＋ 写真アプリから動画をえらぶ</label>
+        <p class="hint">最大15本まで。何回かに分けて追加しても大丈夫です。<br>右上の ✓ を押したあと、iPhoneが動画を準備するまで数秒〜数十秒かかることがあります（長い動画・iCloudの動画は特に）。</p>
       </div>
       <div class="panel step">
         <h2><b>2</b>長さと形をえらぶ</h2>
@@ -277,8 +290,7 @@
     <section class="tab" data-tab="clips">
       <div class="panel">
         <h2>素材 <span id="count" class="count"></span></h2>
-        <button class="btn primary big" id="addBtn">＋ 写真アプリから動画をえらぶ</button>
-        <input id="files" type="file" accept="video/*" multiple hidden>
+        <label for="files" class="btn primary big pick" id="addBtn" role="button">＋ 写真アプリから動画をえらぶ</label>
         <p class="hint">最大15本まで。何回かに分けて追加しても大丈夫です。</p>
         <div id="list"></div>
         <div class="btns" style="margin-top:10px">
@@ -453,6 +465,15 @@
   <button data-go="out"><i>⬇️</i>書き出し</button>
 </nav>
 <div id="hidden"></div>
+<input id="files" class="vh" type="file" accept="video/*,video/quicktime,video/mp4,video/x-m4v,.mov,.mp4,.m4v" multiple>
+<div id="busy" hidden>
+  <div class="busybox">
+    <div class="spinner"></div>
+    <b id="busyTitle"></b>
+    <span id="busySub"></span>
+    <progress id="busyProg" max="1" value="0"></progress>
+  </div>
+</div>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -1567,6 +1588,16 @@ function showTab(name) {
 }
 document.querySelectorAll('nav.tabbar button').forEach(b => b.onclick = () => showTab(b.dataset.go));
 
+// ---------- 読み込み中の表示 ----------
+function showBusy(title, sub = '', frac = null) {
+  $('busy').hidden = false;
+  $('busyTitle').textContent = title;
+  $('busySub').textContent = sub;
+  const pr = $('busyProg');
+  if (frac === null) pr.removeAttribute('value'); else pr.value = frac;
+}
+function hideBusy() { $('busy').hidden = true; }
+
 // ---------- カット（タイムラインの1区間） ----------
 const SEG_PROTO = {
   get url() { return this.src.url; },
@@ -1582,7 +1613,6 @@ function makeSeg(clip, a, b, extra = {}) {
 const targetLen = () => $('target').value === 'none' ? 0 : Number($('target').value);
 
 // ---------- 素材の追加 ----------
-$('addBtn').onclick = () => $('files').click();
 $('files').onchange = async (e) => {
   let files = [...e.target.files];
   e.target.value = '';
@@ -1592,10 +1622,11 @@ $('files').onchange = async (e) => {
     alert(`素材は最大${MAX_CLIPS}本までです。えらんだ中から先頭の${room}本を読み込みます。`);
     files = files.slice(0, room);
   }
-  $('addBtn').disabled = true;
   const added = [], failed = [];
+  showBusy('動画を読み込んでいます', `0 / ${files.length}本`, 0);
   for (const [i, f] of files.entries()) {
     setStatus(`読み込み中 ${i + 1} / ${files.length}：${f.name}`);
+    showBusy('動画を読み込んでいます', `${i + 1} / ${files.length}本目`, i / files.length);
     try {
       const c = await loadClip(f);
       clips.push(c);
@@ -1604,8 +1635,9 @@ $('files').onchange = async (e) => {
       failed.push(f.name);
     }
     renderLibrary();
+    renderEasy();
   }
-  $('addBtn').disabled = false;
+  hideBusy();
   if (failed.length) alert(`読み込めなかった動画があります：\n${failed.join('\n')}`);
   if (added.length && mode === 'easy') {
     added.forEach(c => segs.push(makeSeg(c, 0, c.duration)));
@@ -1994,7 +2026,10 @@ async function autoEdit() {
   $('autoBtn').disabled = true;
   try {
     for (const [i, c] of src.entries()) {
-      await analyze(c, (p) => setStatus(`見どころを探しています ${i + 1} / ${src.length}（${Math.round(p * 100)}%）`));
+      await analyze(c, (p) => {
+        setStatus(`見どころを探しています ${i + 1} / ${src.length}（${Math.round(p * 100)}%）`);
+        showBusy('見どころを探しています', `${i + 1} / ${src.length}本目`, (i + p) / src.length);
+      });
     }
     const pace = $('pace').value === 'auto' ? (TPL[tplId].pace || 'normal') : $('pace').value;
     const w = src.map(c => Math.sqrt(c.duration));
@@ -2018,6 +2053,7 @@ async function autoEdit() {
     refresh();
     setStatus(ok ? `${fmtT(target)} に自動編集しました（${segs.length}カット）` : `素材が足りないため ${fmtT(timeline().total)} になりました（${segs.length}カット）`);
   } finally {
+    hideBusy();
     $('autoBtn').disabled = !clips.length;
   }
 }
@@ -2259,7 +2295,6 @@ async function buildMovie() {
   refresh();
 }
 
-$('eAdd').onclick = () => $('files').click();
 document.querySelectorAll('#eLen button').forEach(b => b.onclick = () => { $('target').value = b.dataset.v; refresh(); });
 document.querySelectorAll('#eShape button').forEach(b => b.onclick = () => { $('aspect').value = b.dataset.v; refresh(); });
 document.querySelectorAll('#eCat button').forEach(b => b.onclick = () => { galleryCat = b.dataset.v; refresh(); });
