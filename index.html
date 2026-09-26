@@ -234,7 +234,7 @@
       <div class="hero">
         <h1 class="brand">Tsumugi<span>つむぎ</span></h1>
         <p>思い出の動画を、1本のムービーにつむぐ。<br>動画をえらんで、長さとテンプレを決めるだけです。</p>
-        <p class="ver">ver 16 ・ night　<button class="linkbtn" id="resetAll" hidden>最初からやり直す</button></p>
+        <p class="ver">ver 17 ・ night　<button class="linkbtn" id="resetAll" hidden>最初からやり直す</button></p>
       </div>
       <div class="panel step">
         <h2><b>1</b>動画をえらぶ <span id="eCount" class="count"></span></h2>
@@ -308,7 +308,7 @@
           <button class="btn" id="ePro">✂️ 細かく編集する</button>
         </div>
         <p style="margin:10px 0 0"><button class="linkbtn" id="resetAll2" style="padding:0">最初からやり直す（えらんだ動画を消す）</button></p>
-        <p class="hint">保存は再生と同じ時間がかかります。途中でほかのアプリに切り替えると一時停止し、戻って「▶ 続きから」で再開できます。</p>
+        <p class="hint">保存は「なめらか書き出し」で1コマずつ作るので、動画の長さの2〜3倍ほど時間がかかります（そのぶん素材どおりの動きになります）。途中でほかのアプリに切り替えると一時停止し、戻ると自動で続きから再開します。</p>
       </div>
     </div>
   </section>
@@ -502,7 +502,7 @@
         </div>
         <button class="btn primary big" id="rec" disabled>● 動画を書き出す</button>
         <div id="result"></div>
-        <p class="hint">再生と同じ時間がかかります（30秒の動画なら30秒）。書き出し中もアプリ内のほかのタブは自由に使えます。ほかのアプリに切り替えると一時停止し、戻ってから「▶ 続きから」で再開できます。</p>
+        <p class="hint">「なめらか書き出し」で1コマずつ作るので、動画の長さの2〜3倍ほど時間がかかります。書き出し中もアプリ内のほかのタブは使えます。ほかのアプリに切り替えると一時停止し、戻ると自動で再開します。（対応していない端末では、再生しながら録画する従来の方式になります）</p>
       </div>
     </section>
   </main>
@@ -2710,7 +2710,9 @@ function unlockMedia() {
 }
 
 function stopPreview() {
-  if (running && !running.record && running.stop) running.stop();
+  if (!running || running.record) return;
+  if (running.stop) running.stop();
+  else { running = null; players.forEach(release); refresh(); } // 準備中（まだ再生前）のプレビューも止める
 }
 
 async function buildMovie() {
@@ -2880,9 +2882,339 @@ function pickMime() {
   return candidates.find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || '';
 }
 
+// ---------- なめらか書き出し（1コマずつ正確に作る：WebCodecs） ----------
+// 画面で再生しながら録画する方式は、iPhoneが重いとコマが飛んでカクつく。
+// こちらは裏でゆっくり再生しながら1コマずつ時刻を付けて圧縮するので、素材どおりの動きになる。
+const OUT_FPS = 30;
+let offlineCaps = null; // { video: {...}, audio: {...} } 使えない端末では null（従来の録画方式にする）
+
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    if (document.querySelector(`script[src="${src}"]`)) return res();
+    const el = document.createElement('script');
+    el.src = src; el.onload = res; el.onerror = rej;
+    document.head.appendChild(el);
+  });
+}
+
+async function checkOffline() {
+  try {
+    if (!window.VideoEncoder || !window.VideoFrame || !window.AudioEncoder || !window.AudioData) return;
+    const isApple = /iPhone|iPad|Macintosh/.test(navigator.userAgent) && !/Chrome|CriOS/.test(navigator.userAgent);
+    let audio = null;
+    for (const a of [{ codec: 'mp4a.40.2', muxer: 'aac' }, ...(isApple ? [] : [{ codec: 'opus', muxer: 'opus' }])]) {
+      const cfg = { codec: a.codec, sampleRate: 48000, numberOfChannels: 2, bitrate: 192000 };
+      if ((await AudioEncoder.isConfigSupported(cfg)).supported) { audio = { ...a, cfg }; break; }
+    }
+    if (!audio) return;
+    await loadScript('mp4-muxer.js');
+    offlineCaps = { audio };
+  } catch {
+    offlineCaps = null;
+  }
+}
+
+async function pickVideoConfig(w, h, bitrate) {
+  // iPhoneはH.264（写真アプリでそのまま扱える）。H.264が無い環境だけVP9を使う
+  const list = [...['avc1.640033', 'avc1.4d0033', 'avc1.42e033', 'avc1.640028', 'avc1.42001f'].map(c => [c, 'avc']), ['vp09.00.41.08', 'vp9']];
+  for (const [codec, muxer] of list) {
+    for (const hw of ['prefer-hardware', 'no-preference']) {
+      const cfg = { codec, width: w, height: h, bitrate, framerate: OUT_FPS, hardwareAcceleration: hw, ...(muxer === 'avc' ? { avc: { format: 'avc' } } : {}) };
+      try { if ((await VideoEncoder.isConfigSupported(cfg)).supported) return { cfg, muxer }; } catch {}
+    }
+  }
+  return null;
+}
+
+// 各カットの音の出入り（切り替えに合わせたフェード）
+function audioEnvelope(param, g, s, vol) {
+  const fade = (tr, ov, first) => {
+    if (first) return 0.03;
+    if (tr === 'cut' || tr === 'none' || !tr) return 0.06;
+    if (OVERLAP.has(tr)) return Math.max(0.06, ov);
+    if (DIP.has(tr)) return Math.min(s.td / 2, g.len / 3);
+    return 0.06;
+  };
+  const st = g.start, en = g.start + g.len;
+  const fi = Math.min(fade(g.transIn, g.overlap, g.i === 0), g.len / 2);
+  const fo = Math.min(g.last ? 1.2 : fade(g.transOut, g.nextOverlap, false), g.len / 2);
+  param.setValueAtTime(0, st);
+  param.linearRampToValueAtTime(vol, st + fi);
+  param.setValueAtTime(vol, Math.max(st + fi, en - fo));
+  param.linearRampToValueAtTime(0, en);
+}
+
+// 元の音とBGMを、リアルタイムではなく計算でミックスする
+async function renderAudio(items, total, s, onStep) {
+  const sr = 48000, len = Math.max(1, Math.ceil(total * sr));
+  const clipItems = items.filter(g => g.kind === 'clip' && !g.clip.mute && s.origVol > 0);
+  // 素材ごとに一度だけデコードし、使う区間だけ切り出して持つ（メモリ節約）
+  const pieces = [];
+  const bySrc = new Map();
+  for (const g of clipItems) { if (!bySrc.has(g.clip.url)) bySrc.set(g.clip.url, []); bySrc.get(g.clip.url).push(g); }
+  let k = 0;
+  for (const [url, gs] of bySrc) {
+    onStep(`元の音を読み込んでいます ${++k} / ${bySrc.size}`);
+    let ab = null;
+    try { ab = await new OfflineAudioContext(2, sr, sr).decodeAudioData(await (await fetch(url)).arrayBuffer()); } catch {}
+    if (!ab) continue;
+    for (const g of gs) {
+      const a = Math.floor(g.clip.in * ab.sampleRate), b = Math.min(ab.length, Math.ceil(g.clip.out * ab.sampleRate));
+      if (b <= a) continue;
+      const cut = new AudioBuffer({ length: b - a, numberOfChannels: 2, sampleRate: ab.sampleRate });
+      for (let ch = 0; ch < 2; ch++) cut.copyToChannel(ab.getChannelData(Math.min(ch, ab.numberOfChannels - 1)).subarray(a, b), ch);
+      pieces.push({ g, buf: cut });
+    }
+  }
+  const placeOrig = (oc) => {
+    for (const { g, buf } of pieces) {
+      const src = oc.createBufferSource(), gn = oc.createGain();
+      src.buffer = buf;
+      src.playbackRate.value = g.clip.speed;
+      audioEnvelope(gn.gain, g, s, s.origVol);
+      src.connect(gn).connect(oc.destination);
+      src.start(g.start, 0, buf.duration);
+    }
+  };
+  onStep('音をミックスしています');
+  const oc1 = new OfflineAudioContext(2, len, sr);
+  placeOrig(oc1);
+  const orig = await oc1.startRendering();
+  if (!bgmFiles.length) return orig;
+
+  const bgms = [];
+  for (const f of bgmFiles) { try { bgms.push(await new OfflineAudioContext(2, sr, sr).decodeAudioData(await f.arrayBuffer())); } catch {} }
+  if (!bgms.length) return orig;
+  const oc2 = new OfflineAudioContext(2, len, sr);
+  placeOrig(oc2);
+  const bg = oc2.createGain();
+  bg.connect(oc2.destination);
+  // 元の音（声など）が大きい所ではBGMを下げる：音量の推移を50msごとに見て、なめらかに追従させる
+  const step = 0.05, win = Math.round(step * sr), fadeOut = Math.min(2, total / 4);
+  const L = orig.getChannelData(0), R = orig.getChannelData(1);
+  let duck = 1;
+  bg.gain.setValueAtTime(s.bgmVol, 0);
+  for (let t = 0, i = 0; t < total; t += step, i += win) {
+    let e = 0;
+    for (let j = i; j < Math.min(i + win, L.length); j++) e += (L[j] * L[j] + R[j] * R[j]) / 2;
+    const loud = Math.sqrt(e / win) > 0.04;
+    duck += ((loud ? 0.35 : 1) - duck) * (loud ? 0.45 : 0.12);
+    const fo = t > total - fadeOut ? Math.max(0, (total - t) / fadeOut) : 1;
+    bg.gain.linearRampToValueAtTime(s.bgmVol * duck * fo, t + step);
+  }
+  let at = 0, bi = 0;
+  while (at < total) {
+    const b = bgms[bi++ % bgms.length], src = oc2.createBufferSource();
+    src.buffer = b;
+    src.connect(bg);
+    src.start(at);
+    at += b.duration;
+  }
+  return oc2.startRendering();
+}
+
+async function encodeAudio(buf, muxer, onProgress) {
+  const cfg = offlineCaps.audio.cfg;
+  let err = null;
+  const enc = new AudioEncoder({ output: (chunk, meta) => muxer.addAudioChunk(chunk, meta), error: (e) => { err = e; } });
+  enc.configure(cfg);
+  const sr = buf.sampleRate, n = 4800;
+  const L = buf.getChannelData(0), R = buf.getChannelData(1);
+  for (let i = 0; i < buf.length; i += n) {
+    const m = Math.min(n, buf.length - i), data = new Float32Array(m * 2);
+    data.set(L.subarray(i, i + m), 0);
+    data.set(R.subarray(i, i + m), m);
+    const ad = new AudioData({ format: 'f32-planar', sampleRate: sr, numberOfFrames: m, numberOfChannels: 2, timestamp: Math.round(i / sr * 1e6), data });
+    enc.encode(ad);
+    ad.close();
+    if (enc.encodeQueueSize > 20) await new Promise(r => setTimeout(r, 0));
+    if (i % (n * 50) === 0) onProgress(i / buf.length);
+    if (err) throw err;
+  }
+  await enc.flush();
+  enc.close();
+  if (err) throw err;
+}
+
+async function runOffline() {
+  const { segs: items, total, s } = timeline();
+  const clipSegs = items.filter(g => g.kind === 'clip');
+  ev.pause();
+  ensureAudio();
+  let wakeLock = null;
+  if (navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { wakeLock = l; }).catch(() => {});
+  running = { raf: 0, stop: null, record: true, paused: false, resume: null, offline: true };
+  document.querySelector('nav.tabbar button[data-go="out"]').classList.add('busy');
+  $('result').innerHTML = '';
+  $('eResult').innerHTML = '';
+  refresh();
+  $('stop').disabled = false;
+  items.forEach(g => { g.player = null; g.started = false; g.done = false; });
+  players.forEach(release);
+  players.forEach(p => { p.a.pause(); p.v.muted = true; });
+
+  let cancelled = false, finished = false, onVis = () => {}, tickRef = null;
+  const cleanup = () => {
+    cancelAnimationFrame(running && running.raf);
+    document.removeEventListener('visibilitychange', onVis);
+    players.forEach(release);
+    if (wakeLock) wakeLock.release().catch(() => {});
+    document.querySelector('nav.tabbar button[data-go="out"]').classList.remove('busy');
+    running = null;
+    $('stop').disabled = true;
+    refresh();
+  };
+  running.stop = () => { cancelled = true; };
+
+  try {
+    // 1) 音
+    setStatus('音声を準備しています…');
+    const audioBuf = await renderAudio(items, total, s, (m) => setStatus(m));
+    if (cancelled) throw new Error('cancel');
+
+    // 2) 圧縮と箱詰めの準備（長い動画はファイルが大きくなりすぎないよう、ビットレートの上限を下げる）
+    const px = Math.min(s.w, s.h);
+    const want = px >= 1440 ? 24e6 : px >= 1080 ? 14e6 : 6e6;
+    const bitrate = Math.round(Math.min(want, 450e6 * 8 / Math.max(total, 1)));
+    const picked = await pickVideoConfig(s.w, s.h, bitrate);
+    if (!picked) throw new Error('この端末は動画の圧縮に対応していません');
+    const vcfg = picked.cfg;
+    const muxer = new Mp4Muxer.Muxer({
+      target: new Mp4Muxer.ArrayBufferTarget(),
+      video: { codec: picked.muxer, width: s.w, height: s.h, frameRate: OUT_FPS },
+      audio: { codec: offlineCaps.audio.muxer, numberOfChannels: 2, sampleRate: 48000 },
+      fastStart: false,
+      firstTimestampBehavior: 'offset',
+    });
+    let vErr = null;
+    const venc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => { vErr = e; } });
+    venc.configure(vcfg);
+
+    // 3) 映像：各コマの時刻ぴったりの絵が出てから描いて圧縮する（出るまで待つ＝コマ飛び・重複なし）
+    const R = makeR(cv, s);
+    R.nClips = clipSegs.length;
+    const N = Math.ceil(total * OUT_FPS);
+    const hasRVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
+    for (const p of players) {
+      if (p.rvfc || !hasRVFC) continue;
+      p.rvfc = true;
+      const cb = (now, meta) => { p.mt = meta.mediaTime; p.mtSrc = p.v.currentSrc; p.v.requestVideoFrameCallback(cb); };
+      p.v.requestVideoFrameCallback(cb);
+    }
+    // 画面に出ているコマの時刻（前の素材の遅れて届いた報告は使わない）
+    const frameOf = (p) => hasRVFC && p.mt >= 0 && p.mtSrc === p.v.currentSrc && !p.v.seeking ? p.mt : p.v.currentTime;
+    let lastProgress = performance.now();
+    let rate = px >= 1440 ? 0.3 : px >= 1080 ? 0.4 : 0.5; // 実際の何倍の速さで裏再生するか（自動で調整）
+    let n = 0, paused = false, idle = 0;
+    const applyRate = () => { for (const p of players) if (p.seg && !p.v.paused) p.v.playbackRate = p.seg.clip.speed * rate; };
+    onVis = () => {
+      if (document.hidden) { paused = true; players.forEach(p => { p.v.pause(); p.hold = false; }); setStatus('一時停止中：アプリに戻ると自動で続きから再開します'); }
+      else if (paused && tickRef) {
+        paused = false;
+        for (const g of items) if (g.player && g.started && !g.done) g.player.v.play().catch(() => {});
+        running.raf = requestAnimationFrame(tickRef);
+      }
+    };
+    document.addEventListener('visibilitychange', onVis);
+
+    const t0 = performance.now();
+    await new Promise((resolve, reject) => {
+      function tick() {
+        if (cancelled) return reject(new Error('cancel'));
+        if (vErr) return reject(vErr);
+        if (paused) return;
+        const tp = n / OUT_FPS; // ここまで作り終えた時刻
+        for (const g of items) {
+          if (g.done || g.kind === 'card') continue;
+          const local = tp - g.start;
+          if (!g.player && local > -2) { const p = players.find(p => !p.seg); if (p) { p.mt = -1; p.mtSrc = null; prepare(p, g); } }
+          const p = g.player;
+          if (!p) continue;
+          if (local >= g.len + 0.2) { g.done = true; release(p); continue; }
+          if (local >= -0.02 && p.ready && !g.started) { g.started = true; p.v.playbackRate = g.clip.speed * rate; p.v.play().catch(() => {}); }
+        }
+        let made = 0, waiting = false, ahead = false;
+        while (n < N && venc.encodeQueueSize < 6 && made < 4) {
+          const t = n / OUT_FPS;
+          const active = [];
+          for (const g of items) {
+            const local = t - g.start;
+            if (local < 0 || local >= g.len) continue;
+            if (g.kind === 'card') { active.push({ g, src: null, local }); continue; }
+            const p = g.player;
+            if (!(p && p.ready && g.started)) { waiting = true; break; }
+            const v = p.v, want = g.clip.in + local * g.clip.speed, have = frameOf(p);
+            const atEnd = v.ended || want >= (v.duration || 1e9) - 0.06;
+            const stuck = performance.now() - lastProgress > 3000; // 3秒進まなければ待つのをやめて先へ
+            if (!atEnd && !stuck && have < want - 0.5 / 30) { waiting = true; break; }   // まだそのコマが出ていない
+            if (have > want + 2.5 / 30) {                                                // 先に進みすぎ
+              ahead = true;
+              if (have > want + 0.4 && !v.seeking && performance.now() - (p.lastSeek || 0) > 500) { p.lastSeek = performance.now(); v.currentTime = want; }
+            }
+            active.push({ g, src: v, local });
+          }
+          if (waiting) break;
+          renderFrame(R, active, t, total);
+          const vf = new VideoFrame(cv, { timestamp: Math.round(t * 1e6), duration: Math.round(1e6 / OUT_FPS) });
+          venc.encode(vf, { keyFrame: n % (OUT_FPS * 2) === 0 });
+          vf.close();
+          n++; made++;
+          lastProgress = performance.now();
+        }
+        // 流量の調整：映像が作業より先に進んだら一時停止して待ってもらい、追いついたら再開
+        for (const g of items) {
+          const p = g.player;
+          if (!p || !g.started || g.done || g.kind !== 'clip') continue;
+          const local = n / OUT_FPS - g.start;
+          if (local < 0 || local >= g.len) continue;
+          const lead = frameOf(p) - (g.clip.in + local * g.clip.speed);
+          if (lead > 1.5 / 30 && !p.v.paused) { p.v.pause(); p.hold = true; }
+          else if (p.hold && lead <= 0.5 / 30) { p.hold = false; p.v.play().catch(() => {}); }
+        }
+        // 速さの自動調整：映像が先に行きすぎるなら遅く、待ってばかりなら少し速く
+        if (ahead && rate > 0.1) { rate *= 0.8; applyRate(); idle = 0; }
+        else if (waiting && made === 0 && venc.encodeQueueSize < 2) { if (++idle > 45 && rate < 1) { rate = Math.min(1, rate * 1.1); applyRate(); idle = 0; } }
+        else idle = 0;
+        const el = (performance.now() - t0) / 1000, pr = n / N;
+        $('prog').value = pr;
+        setStatus(`なめらか書き出し中 ${Math.round(pr * 100)}%（${fmtT(n / OUT_FPS)} / ${fmtT(total)}）${pr > 0.05 ? `・残り約${Math.ceil(el / pr * (1 - pr))}秒` : ''}`);
+        if (n >= N) return resolve();
+        running.raf = requestAnimationFrame(tick);
+      }
+      tickRef = tick;
+      running.raf = requestAnimationFrame(tick);
+    });
+    players.forEach(release);
+    await venc.flush();
+    venc.close();
+
+    // 4) 音を圧縮して入れる
+    setStatus('音声を書き込んでいます…');
+    if (audioBuf) await encodeAudio(audioBuf, muxer, () => {});
+    muxer.finalize();
+    const blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
+    const first = clipSegs[0].clip.date;
+    const name = `${first.getFullYear()}${pad(first.getMonth() + 1)}${pad(first.getDate())}_${(s.title || TPL[s.tpl].name).replace(/[\\/:*?"<>|\s（）()]+/g, '_')}.mp4`;
+    showExportResult(blob, name);
+    DB.put('files', 'export', blob).then(() => DB.put('kv', 'exportName', name)).catch(() => {});
+    finished = true;
+    cleanup();
+    setStatus('完了しました（なめらか書き出し）');
+    if (mode === 'pro') showTab('out');
+  } catch (e) {
+    if (!finished) cleanup();
+    if (e && e.message === 'cancel') { setStatus('書き出しを中止しました'); return; }
+    console.error(e);
+    setStatus(`なめらか書き出しに失敗しました（${e && e.message || e}）。従来の方式で書き出します…`);
+    offlineCaps = null; // この端末では今後も従来の方式
+    setTimeout(() => run({ record: true }), 300);
+  }
+}
+
 function run({ record }) {
   const { segs, total, s } = timeline();
   if (!segs.length || running) return;
+  if (record && offlineCaps) { runOffline(); return; }
   ev.pause();
 
   // ↓ iPhoneは「タップの直後」でないと音付きの再生を許可しないので、await より前に準備しておく
@@ -2923,9 +3255,10 @@ function run({ record }) {
   segs.forEach(g => { g.player = null; g.started = false; g.done = false; });
   players.forEach(release);
 
+  const me = running; // 途中で止められたら（別の再生や書き出しが始まったら）この準備は捨てる
   (async () => {
     if (clipSegs[0]) await prepare(players[0], clipSegs[0]);
-    if (!running) return;
+    if (running !== me) return;
 
     let recorder = null, chunks = [];
     if (record) {
@@ -3124,6 +3457,7 @@ selectSeg(null);
 renderLibrary();
 setMode('easy', 'setup');
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+checkOffline();
 restoreProject().catch(() => false).then((ok) => { booted = true; if (ok) setStatus('前回の続きを復元しました'); saveProject(); });
 </script>
 </body>

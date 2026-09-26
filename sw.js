@@ -1,7 +1,7 @@
 // オフラインでも起動できるよう、アプリ本体をキャッシュする。
 // ページ本体は毎回サーバーに更新を確認し（ブラウザのキャッシュも使わない）、つながらない時だけ保存分を使う。
-const CACHE = 'tsumugi-v16';
-const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+const CACHE = 'tsumugi-v17';
+const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'mp4-muxer.js'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
