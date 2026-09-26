@@ -183,6 +183,7 @@
   #eResult a { color: var(--accent); font-weight: 600; }
 
   .vh { position: fixed; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  label.pick.done { opacity: .5; pointer-events: none; }
   label.pick.alt { margin-top: 8px; width: 100%; color: var(--muted); }
   .inapp { border: 1px solid var(--accent); background: var(--sel); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; font-size: 13px; line-height: 1.6; }
   label.pick { display: flex; align-items: center; justify-content: center; text-align: center; -webkit-user-select: none; user-select: none; }
@@ -227,7 +228,7 @@
       <div class="hero">
         <h1 class="brand">Tsumugi<span>つむぎ</span></h1>
         <p>思い出の動画を、1本のムービーにつむぐ。<br>動画をえらんで、長さとテンプレを決めるだけです。</p>
-        <p class="ver">ver 9 ・ night</p>
+        <p class="ver">ver 10 ・ night</p>
       </div>
       <div class="panel step">
         <h2><b>1</b>動画をえらぶ <span id="eCount" class="count"></span></h2>
@@ -238,7 +239,7 @@
         </div>
         <label for="files" class="btn primary big pick" id="eAdd" role="button">＋ 写真アプリから動画をえらぶ</label>
         <label for="files2" class="btn small pick alt" role="button">うまく選べない時：「ファイル」からえらぶ</label>
-        <p class="hint">最大15本まで。何回かに分けて追加しても大丈夫です。<br>右上の ✓ を押したあと、iPhoneが動画を準備するまで数秒〜数十秒かかることがあります（長い動画・iCloudの動画は特に）。</p>
+        <p class="hint">1本ずつえらびます（最大15本）。えらぶたびに下に並ぶので、続けて追加してください。</p>
       </div>
       <div class="panel step">
         <h2><b>2</b>長さと形をえらぶ</h2>
@@ -472,8 +473,8 @@
   <button data-go="out"><i>⬇️</i>書き出し</button>
 </nav>
 <div id="hidden"></div>
-<input id="files" class="vh" type="file" accept="video/*,video/quicktime,video/mp4,video/x-m4v,.mov,.mp4,.m4v" multiple>
-<input id="files2" class="vh" type="file" multiple>
+<input id="files" class="vh" type="file" accept="video/*">
+<input id="files2" class="vh" type="file">
 <div id="busy" hidden>
   <div class="busybox">
     <div class="spinner"></div>
@@ -2234,6 +2235,8 @@ function markChips(id, value) {
 }
 
 function renderEasy() {
+  $('eAdd').textContent = !clips.length ? '＋ 写真アプリから動画をえらぶ' : clips.length >= MAX_CLIPS ? `${MAX_CLIPS}本えらびました` : `＋ 次の動画をえらぶ（${clips.length} / ${MAX_CLIPS}本）`;
+  $('eAdd').classList.toggle('done', clips.length >= MAX_CLIPS);
   $('eCount').textContent = clips.length ? `${clips.length} / ${MAX_CLIPS}本` : '';
   $('eStart').disabled = !clips.length || !!running;
   $('eStartHint').textContent = clips.length

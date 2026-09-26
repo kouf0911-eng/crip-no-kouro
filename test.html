@@ -17,17 +17,21 @@
 </head>
 <body>
   <h1>動画選択テスト</h1>
-  <p>A〜D を順番に試して、それぞれ動画を1本だけえらんで ✓ を押してください。終わったら、下のログ画面のスクリーンショットを送ってください。</p>
+  <p>今回は <b>E と F だけ</b>試してください。それぞれ動画を2本えらんで ✓ を押し、閉じなければ × で閉じて次へ。終わったらログのスクリーンショットを送ってください。</p>
 
   <label class="t" for="a">A：動画のみ・複数<small>accept="video/*" multiple（アプリと同じ）</small></label>
   <label class="t" for="b">B：動画のみ・1本<small>accept="video/*"</small></label>
   <label class="t" for="c">C：写真と動画・1本<small>accept="image/*,video/*"</small></label>
   <label class="t" for="d">D：制限なし・1本<small>accept なし（写真／ファイルを選ぶメニュー）</small></label>
+  <label class="t" for="e">E：写真と動画・複数<small>accept="image/*,video/*" multiple → 動画を2本えらんでください</small></label>
+  <label class="t" for="f">F：制限なし・複数<small>accept なし multiple → 「写真ライブラリ」から動画を2本</small></label>
 
   <input id="a" type="file" accept="video/*" multiple>
   <input id="b" type="file" accept="video/*">
   <input id="c" type="file" accept="image/*,video/*">
   <input id="d" type="file">
+  <input id="e" type="file" accept="image/*,video/*" multiple>
+  <input id="f" type="file" multiple>
 
   <div id="log"></div>
 
@@ -45,7 +49,7 @@ window.addEventListener('blur', () => log('画面から離れた（選択画面�
 window.addEventListener('focus', () => log('画面に戻った（選択画面が閉じた）'));
 document.addEventListener('visibilitychange', () => log(`表示状態: ${document.visibilityState}`));
 
-for (const id of ['a', 'b', 'c', 'd']) {
+for (const id of ['a', 'b', 'c', 'd', 'e', 'f']) {
   const inp = document.getElementById(id);
   inp.addEventListener('input', () => log(`${id.toUpperCase()}: input イベント`));
   inp.addEventListener('cancel', () => log(`${id.toUpperCase()}: キャンセルされた`));
