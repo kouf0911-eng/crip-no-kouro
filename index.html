@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#232642">
+<meta name="theme-color" content="#0a0d13">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Tsumugi">
@@ -12,25 +12,49 @@
 <link rel="icon" href="icon-192.png">
 <title>Tsumugi</title>
 <style>
+  /* 雨の夜、車窓の向こうの街あかり。フィルムで撮ったような暗く暖かいトーン */
   :root {
-    --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1d1f; --muted: #6b6b70;
-    --line: #e2e0da; --accent: #c2410c; --accent-ink: #ffffff; --sel: #fff1e8;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #111113; --panel: #1c1c1f; --ink: #ececef; --muted: #9a9aa2; --line: #2f2f34; --sel: #3a2a20; }
+    color-scheme: dark;
+    --bg: #0a0d13; --panel: rgba(22, 26, 36, .58); --panel-solid: #151923; --ink: #ece6da; --muted: #8e96a3;
+    --line: rgba(255, 255, 255, .09); --accent: #f0b46a; --accent-2: #7fd6c2; --accent-ink: #1a1206; --sel: rgba(240, 180, 106, .12);
+    --glow: 0 0 24px rgba(240, 180, 106, .35);
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html { -webkit-text-size-adjust: 100%; }
-  body { margin: 0; background: var(--bg); color: var(--ink);
+  html { -webkit-text-size-adjust: 100%; background: #0a0d13; }
+  body { margin: 0; background: var(--bg) radial-gradient(120% 70% at 50% -10%, #1a2233 0%, rgba(10,13,19,0) 60%) no-repeat; color: var(--ink);
     font: 15px/1.6 system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif;
     padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
-  .wrap { max-width: 720px; margin: 0 auto; }
+  .wrap { position: relative; z-index: 1; max-width: 720px; margin: 0 auto; }
+
+  /* 背景：雨粒ごしの街あかり（ボケ）＋フィルムの粒子 */
+  .ambience { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  .ambience::before { content: ''; position: absolute; inset: -10%; filter: blur(28px); opacity: .55;
+    background:
+      radial-gradient(circle at 12% 18%, rgba(240,180,106,.55) 0 3%, transparent 7%),
+      radial-gradient(circle at 78% 12%, rgba(127,214,194,.45) 0 4%, transparent 9%),
+      radial-gradient(circle at 88% 40%, rgba(255,120,140,.35) 0 3%, transparent 8%),
+      radial-gradient(circle at 30% 55%, rgba(120,170,255,.28) 0 5%, transparent 11%),
+      radial-gradient(circle at 65% 70%, rgba(240,210,120,.30) 0 3%, transparent 8%),
+      radial-gradient(circle at 8% 82%, rgba(127,214,194,.30) 0 4%, transparent 9%),
+      radial-gradient(circle at 92% 88%, rgba(240,180,106,.35) 0 3%, transparent 8%);
+    animation: drift 40s ease-in-out infinite alternate; }
+  .ambience::after { content: ''; position: absolute; inset: 0; opacity: .07; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  .rain { position: absolute; inset: 0; opacity: .5;
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(255,255,255,.18) 0 1.2px, transparent 2px),
+      radial-gradient(circle at 70% 60%, rgba(255,255,255,.14) 0 1px, transparent 1.8px),
+      radial-gradient(circle at 45% 80%, rgba(255,255,255,.12) 0 1.4px, transparent 2.2px);
+    background-size: 90px 110px, 130px 150px, 170px 140px; }
+  @keyframes drift { from { transform: translate3d(0, 0, 0) scale(1); } to { transform: translate3d(-3%, 2%, 0) scale(1.06); } }
+  @media (prefers-reduced-motion: reduce) { .ambience::before { animation: none; } }
 
   /* プレビュー（上部に固定） */
-  #stage { position: sticky; top: 0; z-index: 5; background: var(--bg);
+  #stage { position: sticky; top: 0; z-index: 5; background: rgba(10,13,19,.72); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
     padding: calc(8px + env(safe-area-inset-top)) 16px 8px; border-bottom: 1px solid var(--line); }
   .canvas-wrap { position: relative; display: flex; justify-content: center; }
-  canvas#cv { position: relative; z-index: 1; display: block; max-width: 100%; max-height: 36vh; border-radius: 10px; background: #000; }
+  canvas#cv { position: relative; z-index: 1; display: block; max-width: 100%; max-height: 36vh; border-radius: 14px; background: #000;
+    box-shadow: 0 0 0 1px rgba(255,255,255,.06), 0 18px 40px rgba(0,0,0,.6), 0 0 60px rgba(240,180,106,.12); }
   /* 再生用の動画はプレビューの真裏に置く（iPhoneは「見えていない」動画の再生を止めるため、画面内に置いておく） */
   #players { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; z-index: 0; overflow: hidden; }
   #players video { position: absolute; inset: 0; width: 64px; height: 64px; }
@@ -39,7 +63,9 @@
   #status { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 2px; min-height: 18px; }
 
   main { padding: 12px 16px 24px; }
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px; margin-bottom: 14px;
+    -webkit-backdrop-filter: blur(20px) saturate(1.2); backdrop-filter: blur(20px) saturate(1.2);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 10px 30px rgba(0,0,0,.35); }
   .panel h2 { margin: 0 0 10px; font-size: 13px; color: var(--muted); font-weight: 600; letter-spacing: .06em; }
   .row { display: grid; grid-template-columns: 104px 1fr; align-items: center; gap: 8px; margin-bottom: 10px; }
   .row > label:first-child, .row > span:first-child { color: var(--muted); font-size: 14px; }
@@ -49,10 +75,11 @@
   input[type=range] { width: 100%; accent-color: var(--accent); }
   .check { display: flex; align-items: center; gap: 8px; min-height: 36px; }
   .check input { width: 20px; height: 20px; accent-color: var(--accent); }
-  .btn { min-height: 40px; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel);
+  .btn { min-height: 40px; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,.05);
     color: var(--ink); font: inherit; cursor: pointer; white-space: nowrap; }
   .btn.small { min-height: 34px; padding: 4px 10px; font-size: 13px; }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .btn.primary { background: linear-gradient(180deg, #f6c585, #e59f4f); border-color: transparent; color: var(--accent-ink); font-weight: 700;
+    box-shadow: var(--glow); }
   .btn.big { width: 100%; min-height: 52px; font-size: 17px; }
   .btn:disabled { opacity: .45; cursor: not-allowed; }
   .btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -102,7 +129,7 @@
   /* テンプレート */
   #gallery, .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
   .tpl { border: 2px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); cursor: pointer; text-align: left; padding: 0; color: inherit; font: inherit; }
-  .tpl.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+  .tpl.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset, 0 0 18px rgba(240,180,106,.35); }
   .tpl canvas { display: block; width: 100%; background: #000; }
   .tpl div { padding: 5px 6px 7px; }
   .tpl b { display: block; font-size: 13px; line-height: 1.35; }
@@ -122,19 +149,21 @@
   .hero h1 { margin: 0; font-size: 26px; letter-spacing: .02em; }
   .brand { font-family: "Didot", "Bodoni 72", "Hiragino Mincho ProN", "Yu Mincho", Georgia, serif; font-weight: 500;
     font-size: 36px !important; letter-spacing: .06em !important; display: flex; align-items: baseline; gap: 10px; }
-  .brand span { font-size: 14px; letter-spacing: .3em; color: var(--muted); font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; }
-  .brand::after { content: ''; flex: 0 0 36px; height: 1px; background: #c9a24a; align-self: center; margin-left: 2px; }
+  .brand { text-shadow: 0 0 18px rgba(240,180,106,.35); }
+  .brand span { text-shadow: none; font-size: 14px; letter-spacing: .3em; color: var(--muted); font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; }
+  .brand::after { content: ''; flex: 0 0 36px; height: 1px; background: var(--accent); box-shadow: 0 0 8px var(--accent); align-self: center; margin-left: 2px; }
   .hero p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
   .step h2 { display: flex; align-items: center; gap: 8px; font-size: 16px; color: var(--ink); letter-spacing: 0; }
-  .step h2 b { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 14px; }
+  .step h2 b { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--accent); color: var(--accent);
+    font-family: Georgia, serif; font-weight: 500; font-size: 14px; box-shadow: 0 0 12px rgba(240,180,106,.3); }
   .label { margin: 12px 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chips.scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
-  .chips button { flex: none; min-height: 40px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel);
+  .chips button { flex: none; min-height: 40px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.04);
     color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; line-height: 1.25; }
   .chips button small { display: block; font-size: 10px; color: var(--muted); }
-  .chips button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
-  .chips button.on small { color: rgba(255,255,255,.85); }
+  .chips button.on { background: rgba(240,180,106,.16); border-color: var(--accent); color: var(--accent); font-weight: 700; box-shadow: 0 0 14px rgba(240,180,106,.25); }
+  .chips button.on small { color: rgba(240,180,106,.8); }
   .chips.small button { min-height: 34px; padding: 4px 12px; font-size: 13px; }
   #eGallery { margin-top: 10px; }
   #eThumbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; }
@@ -144,16 +173,16 @@
   #eThumbs span { position: absolute; left: 4px; bottom: 2px; color: #fff; font-size: 11px; text-shadow: 0 1px 3px #000; }
   #eThumbs button { position: absolute; right: 2px; top: 2px; width: 26px; height: 26px; border-radius: 50%; border: 0; background: rgba(0,0,0,.6); color: #fff; font-size: 14px; cursor: pointer; }
   .cta { position: sticky; bottom: 0; margin: 0 -16px; padding: 14px 16px calc(12px + env(safe-area-inset-bottom));
-    text-align: center; background: linear-gradient(to bottom, transparent, var(--bg) 22%); }
+    text-align: center; background: linear-gradient(to bottom, transparent, rgba(10,13,19,.85) 35%); }
   .cta .btn { box-shadow: 0 6px 20px rgba(0,0,0,.2); }
-  .cta .btn:disabled { opacity: 1; background: var(--line); border-color: var(--line); color: var(--muted); box-shadow: none; }
+  .cta .btn:disabled { opacity: 1; background: rgba(255,255,255,.07); border-color: var(--line); color: var(--muted); box-shadow: none; }
   .cta .hint { margin-top: 6px; }
   body.easy #play { display: none; }
   #eResult { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
   #eResult a { color: var(--accent); font-weight: 600; }
 
   /* 下部タブ */
-  nav.tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: var(--panel);
+  nav.tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: rgba(12,15,22,.78); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
     border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, 1fr);
     padding-bottom: env(safe-area-inset-bottom); }
   nav.tabbar button { background: none; border: 0; color: var(--muted); font: inherit; font-size: 11px; padding: 8px 0 6px; cursor: pointer; }
@@ -163,6 +192,7 @@
 </style>
 </head>
 <body class="easy setup">
+<div class="ambience" aria-hidden="true"><div class="rain"></div></div>
 <div class="wrap">
   <section id="stage">
     <div class="canvas-wrap"><div id="players"></div><canvas id="cv"></canvas></div>
