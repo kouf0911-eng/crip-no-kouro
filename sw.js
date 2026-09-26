@@ -1,10 +1,10 @@
 // オフラインでも起動できるよう、アプリ本体をキャッシュする。
-// index.html はネット優先（更新がすぐ届く）、つながらない時はキャッシュを使う。
-const CACHE = 'tsumugi-v6';
+// ページ本体は毎回サーバーに更新を確認し（ブラウザのキャッシュも使わない）、つながらない時だけ保存分を使う。
+const CACHE = 'tsumugi-v7';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
@@ -17,7 +17,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' })
       .then((res) => {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(e.request, copy));

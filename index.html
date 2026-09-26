@@ -149,6 +149,7 @@
   .hero h1 { margin: 0; font-size: 26px; letter-spacing: .02em; }
   .brand { font-family: "Didot", "Bodoni 72", "Hiragino Mincho ProN", "Yu Mincho", Georgia, serif; font-weight: 500;
     font-size: 36px !important; letter-spacing: .06em !important; display: flex; align-items: baseline; gap: 10px; }
+  .ver { margin: 4px 0 0 !important; font-size: 11px !important; letter-spacing: .1em; color: rgba(142,150,163,.6) !important; }
   .brand { text-shadow: 0 0 18px rgba(240,180,106,.35); }
   .brand span { text-shadow: none; font-size: 14px; letter-spacing: .3em; color: var(--muted); font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; }
   .brand::after { content: ''; flex: 0 0 36px; height: 1px; background: var(--accent); box-shadow: 0 0 8px var(--accent); align-self: center; margin-left: 2px; }
@@ -211,6 +212,7 @@
       <div class="hero">
         <h1 class="brand">Tsumugi<span>つむぎ</span></h1>
         <p>思い出の動画を、1本のムービーにつむぐ。<br>動画をえらんで、長さとテンプレを決めるだけです。</p>
+        <p class="ver">ver 7 ・ night</p>
       </div>
       <div class="panel step">
         <h2><b>1</b>動画をえらぶ <span id="eCount" class="count"></span></h2>
@@ -2599,7 +2601,22 @@ $('stop').onclick = () => {
   else { running = null; players.forEach(release); refresh(); }
 };
 
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+// 新しい版を公開したら、次に開いた時に自動で入れ替える（古い版が残り続けないように）
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || running) return;
+    reloaded = true;
+    location.reload();
+  });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+    .then((reg) => {
+      reg.update().catch(() => {});
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+    })
+    .catch(() => {});
+}
 selectSeg(null);
 renderLibrary();
 setMode('easy', 'setup');
