@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tsumugi 動画選択テスト</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 16px; background: #0a0d13; color: #ece6da; font: 15px/1.6 -apple-system, system-ui, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { color: #8e96a3; font-size: 13px; margin: 0 0 12px; }
+  .t { display: block; margin: 8px 0; padding: 14px; border-radius: 12px; border: 1px solid #f0b46a; color: #f0b46a; text-align: center; font-weight: 700; }
+  .t small { display: block; font-weight: 400; color: #8e96a3; }
+  input[type=file] { position: fixed; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; }
+  #log { margin-top: 12px; padding: 10px; border-radius: 10px; background: #151923; font: 12px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-all; min-height: 120px; }
+</style>
+</head>
+<body>
+  <h1>動画選択テスト</h1>
+  <p>A〜D を順番に試して、それぞれ動画を1本だけえらんで ✓ を押してください。終わったら、下のログ画面のスクリーンショットを送ってください。</p>
+
+  <label class="t" for="a">A：動画のみ・複数<small>accept="video/*" multiple（アプリと同じ）</small></label>
+  <label class="t" for="b">B：動画のみ・1本<small>accept="video/*"</small></label>
+  <label class="t" for="c">C：写真と動画・1本<small>accept="image/*,video/*"</small></label>
+  <label class="t" for="d">D：制限なし・1本<small>accept なし（写真／ファイルを選ぶメニュー）</small></label>
+
+  <input id="a" type="file" accept="video/*" multiple>
+  <input id="b" type="file" accept="video/*">
+  <input id="c" type="file" accept="image/*,video/*">
+  <input id="d" type="file">
+
+  <div id="log"></div>
+
+<script>
+const logEl = document.getElementById('log');
+const t0 = performance.now();
+function log(msg) {
+  logEl.textContent += `[${((performance.now() - t0) / 1000).toFixed(1)}s] ${msg}\n`;
+}
+log(`UA: ${navigator.userAgent}`);
+log(`standalone: ${!!navigator.standalone}`);
+
+document.querySelectorAll('label.t').forEach(l => l.addEventListener('click', () => log(`${l.htmlFor.toUpperCase()}: ボタンを押した`)));
+window.addEventListener('blur', () => log('画面から離れた（選択画面が開いた）'));
+window.addEventListener('focus', () => log('画面に戻った（選択画面が閉じた）'));
+document.addEventListener('visibilitychange', () => log(`表示状態: ${document.visibilityState}`));
+
+for (const id of ['a', 'b', 'c', 'd']) {
+  const inp = document.getElementById(id);
+  inp.addEventListener('input', () => log(`${id.toUpperCase()}: input イベント`));
+  inp.addEventListener('cancel', () => log(`${id.toUpperCase()}: キャンセルされた`));
+  inp.addEventListener('change', async () => {
+    const files = [...inp.files];
+    log(`${id.toUpperCase()}: change イベント（${files.length}件）`);
+    for (const f of files) {
+      log(`  - ${f.name} / ${f.type || '(種類なし)'} / ${(f.size / 1e6).toFixed(1)}MB`);
+      try {
+        const v = document.createElement('video');
+        v.muted = true; v.playsInline = true; v.preload = 'metadata';
+        v.src = URL.createObjectURL(f);
+        await new Promise((res, rej) => {
+          v.onloadedmetadata = res;
+          v.onerror = () => rej(new Error('読み込みエラー'));
+          setTimeout(() => rej(new Error('10秒たっても読めない')), 10000);
+        });
+        log(`    再生OK：${v.videoWidth}x${v.videoHeight}・${v.duration.toFixed(1)}秒`);
+        URL.revokeObjectURL(v.src);
+      } catch (e) {
+        log(`    再生NG：${e.message}`);
+      }
+    }
+    inp.value = '';
+  });
+}
+</script>
+</body>
+</html>
