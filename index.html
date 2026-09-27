@@ -248,7 +248,7 @@
       <div class="hero">
         <h1 class="brand">Tsumugi<span>つむぎ</span></h1>
         <p>思い出の動画を、1本のムービーにつむぐ。<br>動画をえらんで、長さとテンプレを決めるだけです。</p>
-        <p class="ver">ver 20 ・ night　<button class="linkbtn" id="shareApp">🔗 アプリを共有</button><button class="linkbtn" id="resetAll" hidden>最初からやり直す</button></p>
+        <p class="ver">ver 21 ・ night　<button class="linkbtn" id="shareApp">🔗 アプリを共有</button><button class="linkbtn" id="resetAll" hidden>最初からやり直す</button></p>
       </div>
       <div class="panel step">
         <h2><b>1</b>動画をえらぶ <span id="eCount" class="count"></span></h2>
@@ -281,7 +281,7 @@
         </div>
         <p class="label">画質</p>
         <div class="chips" id="eQual">
-          <button data-v="720">標準<small>720p・早い</small></button><button data-v="1080">高画質<small>1080p</small></button><button data-v="1440">最高画質<small>1440p</small></button><button data-v="2160">4K<small>2160p・時間がかかる</small></button>
+          <button data-v="720">標準<small>720p・早い・電池にやさしい</small></button><button data-v="1080">高画質<small>1080p・SNSに最適</small></button><button data-v="1440">最高画質<small>1440p・大きい画面向け</small></button><button data-v="2160">4K<small>テレビ向け・時間と電池を使う</small></button>
         </div>
         <p class="hint" id="qualNote" hidden></p>
         <p class="label">編集のしかた</p>
@@ -525,7 +525,7 @@
         <div class="row"><label for="height">画質</label>
           <select id="height">
             <option value="720">標準（720p・軽い）</option>
-            <option value="1080">高画質（1080p）</option>
+            <option value="1080">高画質（1080p・SNSに最適）</option>
             <option value="1440">最高画質（1440p・重い）</option>
             <option value="2160">4K（2160p・なめらか書き出しのみ）</option>
           </select></div>
@@ -575,7 +575,7 @@ const $ = (id) => document.getElementById(id);
 const cv = $('cv');
 const ev = $('ev');
 const FPS = 30;
-$('height').value = matchMedia('(max-width: 800px)').matches ? '720' : '1080';
+$('height').value = '1080'; // SNS（TikTok・Instagram・LINE）は1080pで表示されるので、これがいちばん無駄がない
 
 // clips: 読み込んだ素材の動画 { id, name, url, duration, w, h, date, dateSource, include, thumb, frame, strip, scores, step }
 // segs : タイムライン上のカット（1本の素材から何カットでも切り出せる）
@@ -1790,6 +1790,23 @@ function cutSeconds() {
   return (PACE_SEC[pace] || 3.5) * CUTS_MULT[cutsLevel()];
 }
 
+// 画質ごとの保存時間の目安と、電池・発熱の注意
+function qualNoteUpdate() {
+  const h = $('height').value, el = $('qualNote');
+  const len = targetLen() || (segs.length ? timeline().total : 0);
+  const k = { 720: [1.5, 2.5], 1080: [2, 3], 1440: [4, 6], 2160: [7, 12] }[h] || [2, 3];
+  const jp = len >= 60 ? `${Math.floor(len / 60)}分${Math.round(len % 60) ? Math.round(len % 60) + '秒' : ''}` : `${Math.round(len)}秒`;
+  const est = len ? `${jp}の動画で、保存に約${Math.max(1, Math.round(len * k[0] / 60))}〜${Math.max(1, Math.round(len * k[1] / 60))}分（端末によって前後します）。` : '';
+  let msg = '';
+  if (h === '2160' && !offlineCaps) msg = 'この端末は「なめらか書き出し」に対応していないため、4Kの代わりに1440pで保存します。';
+  else if (h === '2160') msg = `4Kはテレビや大きな画面で見る時向けです。${est}電池を多く使うので、充電しながらの保存がおすすめです。TikTok・Instagram・LINEに上げるなら「高画質（1080p）」で見た目は同じです。`;
+  else if (h === '1440') msg = `${est}SNSに上げるなら「高画質（1080p）」で十分です。`;
+  else if (h === '1080') msg = est ? `${est}TikTok・Instagram・LINEにちょうどいい画質です。` : '';
+  else msg = est;
+  el.textContent = msg;
+  el.hidden = !msg;
+}
+
 const dayKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
 function timeline() {
@@ -2819,10 +2836,7 @@ function renderEasy() {
   markChips('eQual', $('height').value);
   markChips('eCuts', cutsLevel());
   markChips('eCuts2', cutsLevel());
-  $('qualNote').hidden = !($('height').value === '2160');
-  $('qualNote').textContent = offlineCaps
-    ? '4Kは1コマずつ丁寧に作るので、保存に動画の長さの5〜10倍ほどかかります（プレビューは軽い画質で表示します）。'
-    : 'この端末は「なめらか書き出し」に対応していないため、4Kの代わりに1440pで保存します。';
+  qualNoteUpdate();
   markChips('eCat', galleryCat);
   document.querySelector('#eOpts [data-k="order"]').classList.toggle('on', $('order').value === 'chrono');
   document.querySelector('#eOpts [data-k="chapters"]').classList.toggle('on', $('chapters').value === 'on');
@@ -3092,7 +3106,6 @@ function pickMime() {
 // 画面で再生しながら録画する方式は、iPhoneが重いとコマが飛んでカクつく。
 // こちらは裏でゆっくり再生しながら1コマずつ時刻を付けて圧縮するので、素材どおりの動きになる。
 const OUT_FPS = 30;
-const tickWait = (px) => px >= 2160 ? 12 : 0; // 4Kは合間に少し休んで、画面が固まらないようにする
 
 function loadScript(src) {
   return new Promise((res, rej) => {
@@ -3333,9 +3346,11 @@ async function runOffline() {
     // 画面に出ているコマの時刻（前の素材の遅れて届いた報告は使わない）
     const frameOf = (p) => hasRVFC && p.mt >= 0 && p.mtSrc === p.v.currentSrc && !p.v.seeking ? p.mt : p.v.currentTime;
     let lastProgress = performance.now();
-    let rate = px >= 2160 ? 0.2 : px >= 1440 ? 0.3 : px >= 1080 ? 0.4 : 0.5; // 実際の何倍の速さで裏再生するか（自動で調整）
-    let n = 0, paused = false, idle = 0;
-    const applyRate = () => { for (const p of players) if (p.seg && !p.v.paused) p.v.playbackRate = p.seg.clip.speed * rate; };
+    // 裏再生の速さ（実際の何倍か）。1コマ作るのにかかる時間を測り、コマを取りこぼさない範囲でいちばん速くする
+    let rate = px >= 2160 ? 0.25 : px >= 1440 ? 0.35 : 0.5;
+    let work = 0, safety = 1; // work: 1コマあたりの作業時間(ms)の平均、safety: コマ落ちを見つけたら下げる係数
+    let n = 0, paused = false;
+    const applyRate = () => { for (const p of players) if (p.seg && !p.v.paused) try { p.v.playbackRate = Math.max(0.07, p.seg.clip.speed * rate); } catch {} };
     onVis = () => {
       if (document.hidden) { paused = true; players.forEach(p => { p.v.pause(); p.hold = false; }); setStatus('一時停止中：アプリに戻ると自動で続きから再開します'); }
       else if (paused && tickRef) {
@@ -3349,10 +3364,13 @@ async function runOffline() {
 
     const t0 = performance.now();
     await new Promise((resolve, reject) => {
-      function tick() {
+      // 途中で思わぬエラーが起きても止まったままにせず、失敗として扱う（従来の方式で書き出し直す）
+      function tick() { try { step(); } catch (e) { reject(e); } }
+      function step() {
         if (cancelled) return reject(new Error('cancel'));
         if (vErr) return reject(vErr);
         if (paused) return;
+        const tickStart = performance.now();
         const tp = n / OUT_FPS; // ここまで作り終えた時刻
         for (const g of items) {
           if (g.done || g.kind === 'card') continue;
@@ -3361,9 +3379,9 @@ async function runOffline() {
           const p = g.player;
           if (!p) continue;
           if (local >= g.len + 0.2) { g.done = true; release(p); continue; }
-          if (local >= -0.02 && p.ready && !g.started) { g.started = true; p.v.playbackRate = g.clip.speed * rate; p.v.play().catch(() => {}); }
+          if (local >= -0.02 && p.ready && !g.started) { g.started = true; try { p.v.playbackRate = Math.max(0.07, g.clip.speed * rate); } catch {} p.v.play().catch(() => {}); }
         }
-        let made = 0, waiting = false, ahead = false;
+        let made = 0, waiting = false, dropped = false;
         const maxMade = px >= 2160 ? 1 : px >= 1440 ? 2 : 4, maxQueue = px >= 2160 ? 2 : px >= 1440 ? 4 : 6;
         if (performance.now() - lastProgress > 20000) return reject(new Error('stall'));
         while (n < N && venc.encodeQueueSize < maxQueue && made < maxMade) {
@@ -3379,8 +3397,12 @@ async function runOffline() {
             const atEnd = v.ended || want >= (v.duration || 1e9) - 0.06;
             const stuck = performance.now() - lastProgress > 3000; // 3秒進まなければ待つのをやめて先へ
             if (!atEnd && !stuck && have < want - 0.5 / 30) { waiting = true; break; }   // まだそのコマが出ていない
+            if (have > want + 0.5 / 30 && !atEnd) {                                      // 必要なコマが飛ばされた（重くて再生側がコマ落ち）
+              dropped = true;
+              // 1コマにつき1回だけ、そのコマの位置へ戻って取り直す（重複・コマ飛びを出さない）
+              if (have < want + 0.4 && p.fixN !== n && !v.seeking) { p.fixN = n; v.pause(); p.hold = true; v.currentTime = want; waiting = true; break; }
+            }
             if (have > want + 2.5 / 30) {                                                // 先に進みすぎ
-              ahead = true;
               if (have > want + 0.4 && !v.seeking && performance.now() - (p.lastSeek || 0) > 500) { p.lastSeek = performance.now(); v.currentTime = want; }
             }
             active.push({ g, src: v, local });
@@ -3404,15 +3426,21 @@ async function runOffline() {
           if (lead > 1.5 / 30 && !p.v.paused) { p.v.pause(); p.hold = true; }
           else if (p.hold && lead <= 0.5 / 30) { p.hold = false; p.v.play().catch(() => {}); }
         }
-        // 速さの自動調整：映像が先に行きすぎるなら遅く、待ってばかりなら少し速く
-        if (ahead && rate > 0.1) { rate *= 0.8; applyRate(); idle = 0; }
-        else if (waiting && made === 0 && venc.encodeQueueSize < 2) { if (++idle > 45 && rate < 1) { rate = Math.min(1, rate * 1.1); applyRate(); idle = 0; } }
-        else idle = 0;
+        // 速さの自動調整：次のコマが届く間隔が、1コマの作業時間より十分長くなるように（短いとコマ落ちする）
+        if (made) {
+          const w = (performance.now() - tickStart) / made;
+          work = work ? work * 0.85 + w * 0.15 : w;
+          if (dropped) safety = Math.max(0.3, safety * 0.8);
+          else safety = Math.min(1.5, safety * 1.02);
+          const want = clamp((1000 / 30) / (Math.max(work, 16) * 1.1) * safety, 0.07, 1); // 0.0625倍より遅い再生はブラウザが受け付けない
+          if (Math.abs(want - rate) / rate > 0.08) { rate = want; applyRate(); }
+        }
         const el = (performance.now() - t0) / 1000, pr = n / N;
         $('prog').value = pr;
         setStatus(`なめらか書き出し中 ${Math.round(pr * 100)}%（${fmtT(n / OUT_FPS)} / ${fmtT(total)}）${pr > 0.05 ? `・残り約${Math.ceil(el / pr * (1 - pr))}秒` : ''}`);
         if (n >= N) return resolve();
-        if (tickWait(px)) setTimeout(() => { running.raf = requestAnimationFrame(tick); }, tickWait(px));
+        // 1コマの作業が重い端末では合間に少し休ませて、画面が固まらないようにする
+        if (work > 40) setTimeout(() => { running.raf = requestAnimationFrame(tick); }, Math.min(30, work * 0.3));
         else running.raf = requestAnimationFrame(tick);
       }
       tickRef = tick;
