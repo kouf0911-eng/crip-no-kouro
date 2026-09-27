@@ -248,7 +248,7 @@
       <div class="hero">
         <h1 class="brand">Tsumugi<span>つむぎ</span></h1>
         <p>思い出の動画を、1本のムービーにつむぐ。<br>動画をえらんで、長さとテンプレを決めるだけです。</p>
-        <p class="ver">ver 19 ・ night　<button class="linkbtn" id="shareApp">🔗 アプリを共有</button><button class="linkbtn" id="resetAll" hidden>最初からやり直す</button></p>
+        <p class="ver">ver 20 ・ night　<button class="linkbtn" id="shareApp">🔗 アプリを共有</button><button class="linkbtn" id="resetAll" hidden>最初からやり直す</button></p>
       </div>
       <div class="panel step">
         <h2><b>1</b>動画をえらぶ <span id="eCount" class="count"></span></h2>
@@ -274,6 +274,10 @@
         <p class="label">画面の形</p>
         <div class="chips" id="eShape">
           <button data-v="auto">おまかせ</button><button data-v="9:16">縦 9:16<small>TikTok・ストーリー</small></button><button data-v="16:9">横 16:9<small>YouTube</small></button><button data-v="1:1">正方形</button>
+        </div>
+        <p class="label">切り替えの量</p>
+        <div class="chips" id="eCuts">
+          <button data-v="less">少なめ<small>じっくり見せる</small></button><button data-v="normal">ふつう<small>プロの標準</small></button><button data-v="more">多め<small>拍ごとに畳みかける</small></button>
         </div>
         <p class="label">画質</p>
         <div class="chips" id="eQual">
@@ -318,6 +322,10 @@
         <div class="chips" id="eLen2">
           <button data-v="15">15秒</button><button data-v="30">30秒</button><button data-v="60">1分</button><button data-v="90">1分30秒</button><button data-v="120">2分</button><button data-v="180">3分</button><button data-v="300">5分</button><button data-v="none">全部</button>
         </div>
+        <p class="label">切り替えの量を変える</p>
+        <div class="chips" id="eCuts2">
+          <button data-v="less">少なめ<small>じっくり見せる</small></button><button data-v="normal">ふつう<small>プロの標準</small></button><button data-v="more">多め<small>拍ごとに畳みかける</small></button>
+        </div>
         <div class="btns" style="margin-top:16px">
           <button class="btn" id="eBack">← 動画・設定を変える</button>
           <button class="btn" id="ePro">✂️ 細かく編集する</button>
@@ -360,6 +368,13 @@
             <option value="slow">ゆったり（6秒前後）</option>
             <option value="normal">ふつう（3〜4秒）</option>
             <option value="fast">テンポよく（2秒前後）</option>
+          </select></div>
+        <div class="row"><label for="cuts">切り替えの量</label>
+          <select id="cuts">
+            <option value="auto" selected>テンプレートにおまかせ</option>
+            <option value="less">少なめ（じっくり見せる）</option>
+            <option value="normal">ふつう（プロのショート動画の標準）</option>
+            <option value="more">多め（拍ごとに畳みかける）</option>
           </select></div>
         <button class="btn primary big" id="autoBtn" disabled>✨ この長さで自動編集する</button>
         <p class="hint">チェックの入った素材から動きの多い場面を探して切り出し、指定の長さぴったりにつなぎます。長い動画からは複数の場面を使います。結果は「編集」タブで1カットずつ直せます。</p>
@@ -439,6 +454,7 @@
           <select id="transMode">
             <option value="auto">テンプレートにおまかせ</option>
             <option value="scene">場面の変わり目だけ（プロ推奨）</option>
+            <option value="accent">要所だけ（数カットに1回＋場面の変わり目）</option>
             <option value="every">毎カット</option>
           </select></div>
         <div class="row"><label for="order">並び順</label>
@@ -973,7 +989,7 @@ const TPL = {
   // ----- ショート動画向け -----
   tiktok: tpl({
     name: 'TikTok風', desc: 'テンポのいいカット、弾むズーム、太字テロップ。縦型ショートに',
-    aspect: '9:16', pace: 'fast', trans: 'white', td: 0.2, font: 'sans', textAnim: 'pop', pulse: true, transMode: 'every', drift: false,
+    aspect: '9:16', pace: 'brisk', trans: 'white', td: 0.2, font: 'sans', textAnim: 'pop', pulse: true, transMode: 'every', drift: false,
     grade(R) { saturate(R, 0.12); contrast(R, 0.3); },
     caption(R, c, a, l) {
       if (!c.caption.trim()) return;
@@ -1032,7 +1048,7 @@ const TPL = {
 
   sns: tpl({
     name: 'SNS投稿風', desc: 'いいね・コメントのアイコンと流れる曲名。縦型SNSの画面風',
-    aspect: '9:16', pace: 'fast', trans: 'cut', td: 0.2, font: 'sans', textAnim: 'fade', drift: false,
+    aspect: '9:16', pace: 'brisk', trans: 'cut', td: 0.2, font: 'sans', textAnim: 'fade', drift: false,
     grade(R) { saturate(R, 0.08); contrast(R, 0.15); },
     hud(R, t) {
       const { w, h, u } = R, c = R.ctx;
@@ -1514,7 +1530,7 @@ function drawMedia(R, src, o) {
   const c = R.ctx, t = R.tpl, { w, h } = R;
   c.save();
   c.globalAlpha = o.alpha;
-  let sc = o.scale * (t.pulse ? 1 + 0.1 * Math.max(0, 1 - (o.local ?? 9) / 0.35) : 1);
+  let sc = o.scale * (t.pulse && o.bounce ? 1 + 0.1 * Math.max(0, 1 - (o.local ?? 9) / 0.35) : 1);
   if ((t.pulse || t.beatPulse) && R.beat && o.t != null) {
     const ph = (((o.t - R.beat.offset) % R.beat.period) + R.beat.period) % R.beat.period / R.beat.period;
     sc *= 1 + 0.03 * Math.exp(-ph * 9); // 拍の頭で小さく「ドン」と寄る
@@ -1629,7 +1645,7 @@ function renderFrame(R, active, frameT, total) {
       c.restore();
       continue;
     }
-    const base = { ...tr, idx: a.g.idx, clip: a.g.clip, local: a.local, len: a.g.len, t: frameT };
+    const base = { ...tr, idx: a.g.idx, clip: a.g.clip, local: a.local, len: a.g.len, t: frameT, bounce: R.s.cuts === 'more' || (a.g.transIn !== 'cut' && a.g.transIn !== 'none') };
     if (tr.speed > 0.05) {
       // 横に流れる切り替えは残像（モーションブラー）をつけて自然に
       const n = 4, spread = R.w * 0.05 * tr.speed;
@@ -1747,7 +1763,8 @@ function settings(overrideTpl) {
     w: Math.round(aw * scale / 2) * 2, h: Math.round(ah * scale / 2) * 2,
     trans: $('trans').value === 'auto' ? t.trans : $('trans').value,
     td: $('td').value === 'auto' ? t.td : Number($('td').value),
-    transMode: $('transMode').value === 'auto' ? (t.transMode || 'scene') : $('transMode').value,
+    transMode: $('transMode').value === 'auto' ? autoTransMode(t) : $('transMode').value,
+    cuts: cutsLevel(),
     chapters: $('chapters').value === 'on',
     ending: $('ending').value === 'on',
     colorMatch: $('colorMatch').value === 'on',
@@ -1755,6 +1772,22 @@ function settings(overrideTpl) {
     bgmVol: +$('bgmVol').value, origVol: +$('origVol').value,
     bgmName: bgmFiles[0] ? bgmFiles[0].name.replace(/\.[^.]+$/, '') : '',
   };
+}
+
+// 切り替えの量（少なめ／ふつう／多め）：カットの長さと、切り替え効果を入れる頻度をまとめて決める
+// プロのショート動画は「冒頭だけ細かく、あとは拍に合わせた2〜3秒の素直なカット、効果は要所だけ」が基本
+const PACE_SEC = { slow: 6, normal: 3.5, brisk: 2.6, fast: 2 };
+const CUTS_MULT = { less: 1.5, normal: 1, more: 0.55 };
+function cutsLevel() { const v = $('cuts').value; return v === 'auto' ? (TPL[tplId].cuts || 'normal') : v; }
+function autoTransMode(t) {
+  const lv = cutsLevel();
+  if (lv === 'less') return 'scene';
+  if (lv === 'more') return 'every';
+  return t.transMode === 'every' ? 'accent' : (t.transMode || 'scene');
+}
+function cutSeconds() {
+  const pace = $('pace').value === 'auto' ? (TPL[tplId].pace || 'normal') : $('pace').value;
+  return (PACE_SEC[pace] || 3.5) * CUTS_MULT[cutsLevel()];
 }
 
 const dayKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
@@ -1778,14 +1811,17 @@ function timeline() {
   }
 
   // 切り替えの入れ方：プロは同じ場面の中はカットでつなぎ、場面（時間・場所）が変わる所だけ演出を入れる
-  let time = 0;
+  let time = 0, sinceFx = 0;
   items.forEach((g, i) => {
     const p = items[i - 1];
     let tr = 'none';
     if (p) {
       const scene = g.kind !== 'clip' || p.kind !== 'clip' ||
         (g.clip.src !== p.clip.src && Math.abs(g.clip.date - p.clip.date) > SCENE_GAP) || !!g.chapter;
-      tr = s.transMode === 'every' || scene ? s.trans : 'cut';
+      // 「要所だけ」：場面の変わり目＋4カットに1回だけ効果を入れ、ほかは素直なカット
+      const fx = s.transMode === 'every' || scene || (s.transMode === 'accent' && ++sinceFx >= 4);
+      if (fx) sinceFx = 0;
+      tr = fx ? s.trans : 'cut';
       p.transOut = tr;
     }
     g.transIn = tr;
@@ -1840,7 +1876,7 @@ function saveProject() {
     if (restoring || !booted) return;
     const project = {
       v: 1, nextId, tplId, mode, lastEdit, view: document.body.classList.contains('result') ? 'result' : 'setup', tlManual, galleryCat,
-      settings: Object.fromEntries(['target', 'pace', 'aspect', 'height', 'fit', 'trans', 'td', 'transMode', 'order', 'chapters', 'ending', 'colorMatch', 'title', 'dfmt', 'dpos', 'bgmVol', 'origVol'].map(id => [id, $(id).value])),
+      settings: Object.fromEntries(['target', 'pace', 'cuts', 'aspect', 'height', 'fit', 'trans', 'td', 'transMode', 'order', 'chapters', 'ending', 'colorMatch', 'title', 'dfmt', 'dpos', 'bgmVol', 'origVol'].map(id => [id, $(id).value])),
       clips: clips.map(c => ({ id: c.id, name: c.name, type: c.type, duration: c.duration, w: c.w, h: c.h, date: c.date.getTime(), dateSource: c.dateSource,
         include: c.include, thumb: c.thumb, strip: c.strip, scores: c.scores, step: c.step, avg: c.avg })),
       segs: segs.map(g => ({ id: g.id, src: g.src.id, in: g.in, out: g.out, speed: g.speed, caption: g.caption, showDate: g.showDate, mute: g.mute })),
@@ -2318,9 +2354,8 @@ async function analyze(c, onProgress) {
 }
 
 // 1本の素材から、合計 share 秒ぶんの見どころを（重ならないよう）k か所切り出す
-function pickWindows(c, share, pace) {
+function pickWindows(c, share, cut) {
   share = Math.min(share, c.duration);
-  const cut = { slow: 6, normal: 3.5, fast: 2 }[pace] || 3.5;
   let k = Math.max(1, Math.round(share / cut));
   const n = c.scores.length;
   const res = [];
@@ -2354,13 +2389,17 @@ function fitExact(target) {
   for (let pass = 0; pass < 6; pass++) {
     const diff = target - timeline().total;
     if (Math.abs(diff) < 0.05) return true;
-    const room = segs.map(g => diff > 0 ? (g.duration - g.out) / g.speed : (g.out - g.in - 0.8) / g.speed).map(r => Math.max(0, r));
+    const room = segs.map(g => diff > 0 ? (g.hook ? 0 : (g.duration - g.out) / g.speed) : (g.out - g.in - 0.8) / g.speed).map(r => Math.max(0, r));
     const R = room.reduce((a, b) => a + b, 0);
-    if (R < 0.01) return false;
+    if (R < 0.01) break;
     segs.forEach((g, i) => {
       const d = clamp(diff * room[i] / R, -room[i], room[i]);
       g.out = clamp(g.out + d * g.speed, g.in + 0.3, g.duration);
     });
+  }
+  if (Math.abs(target - timeline().total) >= 0.1 && segs.some(g => g.hook)) {
+    segs.forEach(g => { g.hook = false; }); // ほかで足りない時だけ冒頭も伸ばす
+    return fitExact(target);
   }
   return Math.abs(target - timeline().total) < 0.1;
 }
@@ -2388,11 +2427,14 @@ function calmWindow(c, L) {
 // 起承転結：始まりは長め → 中盤は普通 → 盛り上がりは短く畳みかけ → ラストは長めに余韻
 function shapeArc() {
   const n = segs.length;
+  const hook = TPL[tplId].cat === 'short' && cutsLevel() !== 'less';
+  segs[0].hook = hook; // 冒頭の短いカットは、長さ合わせで伸ばさない
   if (n < 4) return;
   segs.forEach((g, i) => {
     const pos = i / (n - 1);
+    // ショート動画は最初の1〜2秒でつかむ（冒頭を短く）。それ以外は始まりを長めに
     const f = i === 0 ? 1.35 : i === n - 1 ? 1.6 : pos > 0.55 && pos < 0.9 ? 0.72 : 1;
-    const len = (g.out - g.in) * f;
+    const len = i === 0 && hook ? Math.min(g.out - g.in, clamp(cutSeconds() * 0.6, 0.8, 1.8)) : (g.out - g.in) * f;
     g.out = Math.min(g.duration, g.in + len);
     g.in = Math.max(0, g.out - len);
   });
@@ -2423,9 +2465,9 @@ function cutOnAction() {
 }
 
 // スローモーションの見せ場：盛り上がり区間でいちばん動きのあるカットを0.5倍速に（長さは変えない）
-function slowMoHighlight(pace) {
+function slowMoHighlight(cut) {
   const n = segs.length;
-  if (n < 5 || pace === 'fast') return false;
+  if (n < 5 || cut < 2.2) return false;
   let best = null, bestV = -1;
   segs.forEach((g, i) => {
     const pos = i / (n - 1);
@@ -2552,7 +2594,7 @@ async function autoEdit() {
       showBusy('BGMのテンポを解析しています', bgmFiles[0].name, null);
       beat = await analyzeBgm(bgmFiles[0]);
     }
-    const pace = $('pace').value === 'auto' ? (TPL[tplId].pace || 'normal') : $('pace').value;
+    const cut = cutSeconds();
     const w = src.map(c => Math.sqrt(c.duration));
     const W = w.reduce((a, b) => a + b, 0);
     let budget = target;
@@ -2560,7 +2602,7 @@ async function autoEdit() {
       segs = [];
       src.forEach((c, i) => {
         const share = clamp(budget * w[i] / W, Math.min(1.2, c.duration), c.duration);
-        for (const [a, b] of pickWindows(c, share, pace)) segs.push(makeSeg(c, a, b));
+        for (const [a, b] of pickWindows(c, share, cut)) segs.push(makeSeg(c, a, b));
       });
       const total = timeline().total;
       if (Math.abs(total - target) < 0.3) break;
@@ -2569,9 +2611,20 @@ async function autoEdit() {
     }
     shapeArc();
     cutOnAction();
-    const slow = slowMoHighlight(pace);
+    const slow = slowMoHighlight(cut);
     let ok = fitExact(target);
-    if (beat) { snapToBeats(beat, target); ok = Math.abs(timeline().total - target) < 0.3; }
+    if (beat) {
+      snapToBeats(beat, target);
+      // 拍合わせで長さが足りなくなった時は、余裕のあるカットを「1拍ぶん」ずつ伸ばす（後ろの切れ目も拍に乗ったまま）
+      for (let k = 0; k < 64 && target - timeline().total > beat.period * 0.5; k++) {
+        const g = segs.slice(0, -1).reverse().find(g => g.out + beat.period * g.speed <= g.duration);
+        if (!g) break;
+        g.out += beat.period * g.speed;
+      }
+      const last = segs[segs.length - 1];
+      if (last) last.out = clamp(last.out + (target - timeline().total) * last.speed, last.in + 0.4, last.duration);
+      ok = Math.abs(timeline().total - target) < 0.3;
+    }
     lastEdit = { beat, chrono: $('order').value === 'chrono', arc: segs.length >= 4, action: true, slow, shake: true };
     tlManual = false;
     selectSeg(segs[0] || null);
@@ -2597,6 +2650,7 @@ $('fitBtn').onclick = () => {
 };
 $('target').addEventListener('change', () => { updateLengthInfo(); if (targetLen() && clips.length) autoEdit(); });
 $('pace').addEventListener('change', () => { if (targetLen() && clips.length) autoEdit(); });
+$('cuts').addEventListener('change', () => { if (targetLen() && clips.length) autoEdit(); else refresh(); });
 
 // ---------- テンプレート一覧 ----------
 let demoCache = {};
@@ -2763,6 +2817,8 @@ function renderEasy() {
   markChips('eLen2', $('target').value);
   markChips('eShape', $('aspect').value);
   markChips('eQual', $('height').value);
+  markChips('eCuts', cutsLevel());
+  markChips('eCuts2', cutsLevel());
   $('qualNote').hidden = !($('height').value === '2160');
   $('qualNote').textContent = offlineCaps
     ? '4Kは1コマずつ丁寧に作るので、保存に動画の長さの5〜10倍ほどかかります（プレビューは軽い画質で表示します）。'
@@ -2817,7 +2873,9 @@ function renderEasy() {
   if (lastEdit && lastEdit.beat && (TPL[tplId].pulse || TPL[tplId].beatPulse)) tags.push('拍に合わせたズーム');
   if (offlineCaps) tags.push('次の場面の音を少し先に（J-カット）');
   const st = settings();
-  tags.push(st.transMode === 'every' ? '毎カットに切り替え効果' : '場面の変わり目だけ切り替え効果');
+  tags.push({ less: '切り替え少なめ（じっくり見せる）', normal: '切り替えはプロの標準テンポ', more: '切り替え多め（拍ごとに畳みかける）' }[st.cuts]);
+  tags.push(st.transMode === 'every' ? '毎カットに切り替え効果' : st.transMode === 'accent' ? '切り替え効果は要所だけ' : '場面の変わり目だけ切り替え効果');
+  if (TPL[tplId].cat === 'short' && st.cuts !== 'less' && segs.length >= 4) tags.push('冒頭1〜2秒でつかむ短いカット');
   if (TPL[tplId].drift !== false) tags.push('ゆっくりズーム');
   tags.push('音のなめらかなつなぎ');
   if (bgmFiles.length) tags.push('声が入るとBGMを自動で下げる');
@@ -2896,6 +2954,15 @@ $('eRec').onclick = () => {
   window.scrollTo(0, 0);
   run({ record: true });
 };
+document.querySelectorAll('#eCuts button').forEach(b => b.onclick = () => { $('cuts').value = b.dataset.v; refresh(); });
+document.querySelectorAll('#eCuts2 button').forEach(b => b.onclick = async () => {
+  if (running && running.record) return;
+  unlockMedia();
+  stopPreview();
+  $('cuts').value = b.dataset.v;
+  await buildMovie();
+  run({ record: false });
+});
 document.querySelectorAll('#eLen2 button').forEach(b => b.onclick = async () => {
   if (running && running.record) return;
   unlockMedia();
