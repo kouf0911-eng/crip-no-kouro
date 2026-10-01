@@ -248,7 +248,7 @@
       <div class="hero">
         <h1 class="brand">Tsumugi<span>つむぎ</span></h1>
         <p>思い出の動画を、1本のムービーにつむぐ。<br>動画をえらんで、長さとテンプレを決めるだけです。</p>
-        <p class="ver">ver 21 ・ night　<button class="linkbtn" id="shareApp">🔗 アプリを共有</button><button class="linkbtn" id="resetAll" hidden>最初からやり直す</button></p>
+        <p class="ver">ver 22 ・ night　<button class="linkbtn" id="shareApp">🔗 アプリを共有</button><button class="linkbtn" id="resetAll" hidden>最初からやり直す</button></p>
       </div>
       <div class="panel step">
         <h2><b>1</b>動画をえらぶ <span id="eCount" class="count"></span></h2>
@@ -331,7 +331,7 @@
           <button class="btn" id="ePro">✂️ 細かく編集する</button>
         </div>
         <p style="margin:10px 0 0"><button class="linkbtn" id="resetAll2" style="padding:0">最初からやり直す（えらんだ動画を消す）</button></p>
-        <p class="hint">保存は「なめらか書き出し」で1コマずつ作るので、動画の長さの2〜3倍ほど時間がかかります（そのぶん素材どおりの動きになります）。途中でほかのアプリに切り替えると一時停止し、戻ると自動で続きから再開します。</p>
+        <p class="hint">保存は端末の動画処理機能で1コマずつ作ります（素材どおりのなめらかな動き）。作ったところまでは2秒ごとに端末に残すので、途中でほかのアプリに切り替えたり画面が消えたりしても、戻ると続きから再開します。</p>
       </div>
     </div>
   </section>
@@ -544,7 +544,7 @@
         </div>
         <button class="btn primary big" id="rec" disabled>● 動画を書き出す</button>
         <div id="result"></div>
-        <p class="hint">「なめらか書き出し」で1コマずつ作るので、動画の長さの2〜3倍ほど時間がかかります。書き出し中もアプリ内のほかのタブは使えます。ほかのアプリに切り替えると一時停止し、戻ると自動で再開します。（対応していない端末では、再生しながら録画する従来の方式になります）</p>
+        <p class="hint">端末の動画処理機能で1コマずつ作ります。書き出し中もアプリ内のほかのタブは使えます。作ったところまでは2秒ごとに端末に残すので、ほかのアプリに切り替えても、戻ると続きから再開します。（対応していない端末では、再生しながら録画する従来の方式になります）</p>
       </div>
     </section>
   </main>
@@ -901,7 +901,7 @@ function letterbox(R, ratio = 2.39, portrait = 0.08) {
 }
 
 const blurA = document.createElement('canvas'), blurB = document.createElement('canvas');
-function srcSize(src) { return [src.videoWidth || src.width, src.videoHeight || src.height]; }
+function srcSize(src) { return [src.videoWidth || src.displayWidth || src.width, src.videoHeight || src.displayHeight || src.height]; }
 // 縮小→拡大でぼかした背景（ctx.filter非対応のiPhoneでも動く）
 function blurBg(R, src, dark = 0.35) {
   const [vw, vh] = srcSize(src);
@@ -1794,9 +1794,14 @@ function cutSeconds() {
 function qualNoteUpdate() {
   const h = $('height').value, el = $('qualNote');
   const len = targetLen() || (segs.length ? timeline().total : 0);
-  const k = { 720: [1.5, 2.5], 1080: [2, 3], 1440: [4, 6], 2160: [7, 12] }[h] || [2, 3];
   const jp = len >= 60 ? `${Math.floor(len / 60)}分${Math.round(len % 60) ? Math.round(len % 60) + '秒' : ''}` : `${Math.round(len)}秒`;
-  const est = len ? `${jp}の動画で、保存に約${Math.max(1, Math.round(len * k[0] / 60))}〜${Math.max(1, Math.round(len * k[1] / 60))}分（端末によって前後します）。` : '';
+  const mins = (sec) => sec < 60 ? `${Math.max(10, Math.round(sec / 10) * 10)}秒` : `${Math.round(sec / 60)}分`;
+  let rec = 0;
+  try { rec = +localStorage.getItem(`tsumugi.speed.${h}`) || 0; } catch {}
+  // 前回この端末で保存した時の実績があれば、それで見積もる
+  const k = { 720: [0.8, 2], 1080: [1, 2.5], 1440: [2, 4], 2160: [4, 8] }[h] || [1, 2.5];
+  const est = !len ? '' : rec ? `${jp}の動画で、保存に約${mins(len * rec)}（この端末の前回の実績から）。`
+    : `${jp}の動画で、保存に約${mins(len * k[0])}〜${mins(len * k[1])}（端末によって前後します）。`;
   let msg = '';
   if (h === '2160' && !offlineCaps) msg = 'この端末は「なめらか書き出し」に対応していないため、4Kの代わりに1440pで保存します。';
   else if (h === '2160') msg = `4Kはテレビや大きな画面で見る時向けです。${est}電池を多く使うので、充電しながらの保存がおすすめです。TikTok・Instagram・LINEに上げるなら「高画質（1080p）」で見た目は同じです。`;
@@ -3258,7 +3263,189 @@ async function encodeAudio(buf, muxer, onProgress) {
   if (err) throw err;
 }
 
+// ---------- 直接読み込み：再生を待たずに、素材のコマを直接取り出して書き出す（WebCodecs） ----------
+// 動画を裏で再生してコマが出るのを待つ方式より数倍速く、電池の負担も小さい。
+// 作ったところまでを2秒ごとに端末へ保存するので、アプリを切り替えても続きから再開できる。
+let directOff = false;      // この端末で直接読み込みが失敗したら、以後は再生方式を使う
+let lastExportPath = '';    // 直近の書き出し方式（確認用）
+const demuxCache = new Map();
+const GOP = OUT_FPS * 2;    // 2秒ごとに区切って保存
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// ファイルの一番外側の箱（ftyp・moov・mdat）の位置を、中身を読まずに調べる
+async function topBoxes(blob) {
+  const found = {};
+  let pos = 0;
+  while (pos + 8 <= blob.size) {
+    const h = new DataView(await blob.slice(pos, pos + 16).arrayBuffer());
+    let len = h.getUint32(0);
+    const type = String.fromCharCode(h.getUint8(4), h.getUint8(5), h.getUint8(6), h.getUint8(7));
+    if (len === 1) len = Number(h.getBigUint64(8));
+    else if (len === 0) len = blob.size - pos;
+    if (len < 8) break;
+    found[type] = found[type] || [pos, len];
+    pos += len;
+  }
+  return found;
+}
+
+// 素材の目次（どのコマがファイルのどこにあるか）を読む。動画本体は読まない
+function openDemux(clip) {
+  if (!demuxCache.has(clip.url)) demuxCache.set(clip.url, (async () => {
+    const blob = await fetch(clip.url).then(r => r.blob());
+    const boxes = await topBoxes(blob);
+    if (!boxes.moov) throw new Error('目次(moov)が見つかりません');
+    const f = MP4Box.createFile();
+    let info = null, perr = null;
+    f.onReady = (i) => { info = i; };
+    f.onError = (e) => { perr = e; };
+    // iPhoneの動画は目次がファイルの最後にあるので、先頭の箱（ftyp）と目次だけをつなげて読ませる
+    // （コマの位置は目次の中に絶対位置で書かれているので、つなげても変わらない）
+    const head = boxes.ftyp ? new Uint8Array(await blob.slice(boxes.ftyp[0], boxes.ftyp[0] + boxes.ftyp[1]).arrayBuffer()) : new Uint8Array(0);
+    const moovBuf = await blob.slice(boxes.moov[0], boxes.moov[0] + boxes.moov[1]).arrayBuffer();
+    const joined = new Uint8Array(head.length + moovBuf.byteLength);
+    joined.set(head, 0);
+    joined.set(new Uint8Array(moovBuf), head.length);
+    const ab = joined.buffer;
+    ab.fileStart = 0;
+    f.appendBuffer(ab);
+    f.flush();
+    if (!info) throw new Error(`目次を読めません ${perr || ''}`);
+    const vt = info.videoTracks[0];
+    if (!vt) throw new Error('映像がありません');
+    const trak = f.getTrackById(vt.id);
+    const entry = trak.mdia.minf.stbl.stsd.entries[0];
+    const ts = trak.mdia.mdhd.timescale;
+    // 編集リスト（先頭のずれ）を、video要素の再生時刻と同じになるように反映
+    let mediaStart = 0, empty = 0;
+    for (const e of (trak.edts && trak.edts.elst && trak.edts.elst.entries) || []) {
+      if (e.media_time === -1) empty += e.segment_duration / info.timescale;
+      else { mediaStart = e.media_time; break; }
+    }
+    const m = trak.tkhd.matrix || [65536, 0, 0, 0, 65536, 0, 0, 0, 0];
+    const rot = ((Math.round(Math.atan2(m[1], m[0]) * 180 / Math.PI / 90) * 90) % 360 + 360) % 360; // iPhoneの縦動画は90度回転の指定つき
+    const samples = trak.samples.map(x => ({ off: x.offset, size: x.size, key: !!x.is_sync, t: (x.cts - mediaStart) / ts + empty, dur: x.duration / ts }));
+    // 復号の設定（avcC／hvcC）は、ファイルに入っている元のバイト列をそのまま使う（作り直すとずれることがある）
+    let description;
+    const cbox = entry.avcC || entry.hvcC;
+    if (cbox) {
+      const at = cbox.start - head.length + cbox.hdr_size;
+      description = new Uint8Array(moovBuf, at, cbox.size - cbox.hdr_size);
+    }
+    const cfg = { codec: vt.codec, codedWidth: vt.video.width, codedHeight: vt.video.height, ...(description ? { description } : {}) };
+    const sup = await VideoDecoder.isConfigSupported(cfg).catch(() => ({ supported: false }));
+    if (!sup.supported) throw new Error(`この形式は直接読み込めません（${cfg.codec}）`);
+    return { blob, cfg, samples, rot };
+  })());
+  return demuxCache.get(clip.url);
+}
+
+// 1カットぶんのコマを順に取り出す（指定した時刻のコマを返す）
+class FrameStream {
+  constructor(dm, at) {
+    this.dm = dm; this.frames = []; this.err = null; this.done = false; this.flushed = false; this.waiters = [];
+    this.dec = new VideoDecoder({ output: (fr) => { this.frames.push(fr); this.kick(); }, error: (e) => { this.err = e; this.kick(); } });
+    this.dec.configure({ ...dm.cfg, optimizeForLatency: true });
+    // 指定時刻より前の、いちばん近いキーフレームから読み始める
+    let i = 0;
+    dm.samples.forEach((x, k) => { if (x.key && x.t <= at + 0.001) i = k; });
+    this.i = i;
+  }
+  kick() { const w = this.waiters; this.waiters = []; w.forEach(r => r()); }
+  wait(ms) { return new Promise(r => { this.waiters.push(r); setTimeout(r, ms); }); }
+  async feed() {
+    const s = this.dm.samples;
+    if (this.i >= s.length) {
+      if (!this.flushed) { this.flushed = true; this.dec.flush().then(() => { this.done = true; this.kick(); }, (e) => { this.err = this.err || e; this.kick(); }); }
+      return;
+    }
+    // 近くにあるコマはまとめて1回で読む
+    let j = this.i, lo = s[j].off, hi = s[j].off + s[j].size;
+    while (j + 1 < s.length && j + 1 - this.i < 12) {
+      const nx = s[j + 1], nlo = Math.min(lo, nx.off), nhi = Math.max(hi, nx.off + nx.size);
+      if (nhi - nlo > 24 * 2 ** 20) break;
+      lo = nlo; hi = nhi; j++;
+    }
+    const buf = await this.dm.blob.slice(lo, hi).arrayBuffer();
+    if (this.dec.state !== 'configured') return;
+    for (let k = this.i; k <= j; k++) {
+      const x = s[k];
+      this.dec.decode(new EncodedVideoChunk({ type: x.key ? 'key' : 'delta', timestamp: Math.round(x.t * 1e6), duration: Math.round(x.dur * 1e6), data: new Uint8Array(buf, x.off - lo, x.size) }));
+    }
+    this.i = j + 1;
+  }
+  async frameAt(t) {
+    const T = Math.round(t * 1e6) + 1000;
+    for (let guard = 0; ; guard++) {
+      if (this.err) throw this.err;
+      if (this.dec.state === 'closed') throw new Error('読み込みが中断されました');
+      this.frames.sort((a, b) => a.timestamp - b.timestamp);
+      while (this.frames.length > 1 && this.frames[1].timestamp <= T) this.frames.shift().close();
+      // 次のコマまで出ていれば、今のコマが確定
+      if (this.frames.some(fr => fr.timestamp > T) || (this.done && this.dec.decodeQueueSize === 0)) break;
+      if (!this.flushed && this.dec.decodeQueueSize < 6) await this.feed();
+      else await this.wait(20);
+      if (guard > 5000) throw new Error('読み込みが進みません');
+    }
+    const fr = this.frames.filter(x => x.timestamp <= T).pop() || this.frames[0];
+    return fr ? this.view(fr) : null;
+  }
+  // 回転の指定がある動画は、正しい向きに直してから渡す
+  view(fr) {
+    const r = this.dm.rot;
+    if (!r) return fr;
+    if (this.viewOf === fr) return this.cv;
+    const w = fr.displayWidth, h = fr.displayHeight, sw = r % 180 ? h : w, sh = r % 180 ? w : h;
+    const c = this.cv || (this.cv = document.createElement('canvas'));
+    if (c.width !== sw || c.height !== sh) { c.width = sw; c.height = sh; }
+    const x = c.getContext('2d');
+    x.setTransform(1, 0, 0, 1, sw / 2, sh / 2);
+    x.rotate(r * Math.PI / 180);
+    x.drawImage(fr, -w / 2, -h / 2);
+    this.viewOf = fr;
+    return c;
+  }
+  close() {
+    this.frames.forEach(fr => fr.close());
+    this.frames = [];
+    try { if (this.dec.state !== 'closed') this.dec.close(); } catch {}
+    this.kick();
+  }
+}
+
+async function prepareDirect(clipSegs) {
+  if (directOff || typeof VideoDecoder === 'undefined') return false;
+  try {
+    await loadScript('mp4box.js');
+    for (const g of clipSegs) await openDemux(g.clip.src);
+    return true;
+  } catch (e) {
+    console.warn('直接読み込みは使えないため、再生方式で書き出します', e);
+    return false;
+  }
+}
+
+// 途中まで作った保存データ（再開用）
+const expKey = (k) => `exp:${k}`;
+async function clearExportJob() {
+  const job = await DB.get('kv', 'exportJob').catch(() => null);
+  if (job) for (let k = 0; k < job.parts; k++) await DB.del('files', expKey(k)).catch(() => {});
+  await DB.del('kv', 'exportJob').catch(() => {});
+}
+// 同じ編集・同じ設定かどうかの目印（違えば最初から作り直す）
+function exportSig(items, s, codec) {
+  const r3 = (x) => Math.round(x * 1000) / 1000;
+  const str = JSON.stringify([codec, s, items.map(g => g.kind === 'clip'
+    ? [g.clip.src.id, g.clip.src.name, r3(g.clip.in), r3(g.clip.out), g.clip.speed, g.clip.caption, g.clip.showDate, g.transIn, g.transOut, r3(g.start)]
+    : [g.kind, g.title || g.text || '', g.sub || '', r3(g.start), r3(g.len)])]);
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
+  return `${(h >>> 0).toString(36)}-${str.length}`;
+}
+
 async function runOffline() {
+  const tStart = performance.now();
+  let cleanRun = true; // 中断・再開なしで最後まで作れたか（保存時間の実績に使う）
   exportMode = true;
   const { segs: items, total, s } = timeline();
   exportMode = false;
@@ -3289,6 +3476,127 @@ async function runOffline() {
     refresh();
   };
   running.stop = () => { cancelled = true; };
+
+  // 直接読み込みで映像を作る。2秒ごとに端末へ保存し、中断しても最後の区切りから続ける
+  async function directVideo(vcfg, muxer) {
+    const R = makeR(cv, s);
+    R.nClips = clipSegs.length;
+    R.beat = lastEdit && lastEdit.beat;
+    const N = Math.ceil(total * OUT_FPS);
+    const sig = exportSig(items, s, vcfg.codec);
+    let job = await DB.get('kv', 'exportJob').catch(() => null);
+    if (!job || job.sig !== sig || job.done > N) { await clearExportJob(); job = { sig, done: 0, parts: 0, meta: null }; }
+    if (job.done > 0) cleanRun = false;
+    if (job.done > 0) setStatus(`前回の続き（${Math.round(job.done / N * 100)}%）から再開します…`);
+    let n = job.done, venc = null, vErr = null, cur = [], hidden = false, retries = 0;
+    const startN = n, t0 = performance.now();
+    const streams = new Map();
+    const copyDesc = (d) => d ? (d.buffer ? new Uint8Array(d.buffer, d.byteOffset, d.byteLength) : new Uint8Array(d)).slice().buffer : undefined;
+    const newEncoder = () => {
+      vErr = null; cur = [];
+      venc = new VideoEncoder({
+        output: (ch, meta) => {
+          const data = new Uint8Array(ch.byteLength);
+          ch.copyTo(data);
+          cur.push({ type: ch.type, ts: ch.timestamp, dur: ch.duration, data: data.buffer });
+          if (!job.meta && meta && meta.decoderConfig) {
+            const dc = meta.decoderConfig, cs = dc.colorSpace;
+            job.meta = { decoderConfig: { codec: dc.codec, codedWidth: dc.codedWidth, codedHeight: dc.codedHeight, description: copyDesc(dc.description),
+              colorSpace: cs ? { primaries: cs.primaries, transfer: cs.transfer, matrix: cs.matrix, fullRange: cs.fullRange } : undefined } };
+          }
+        },
+        error: (e) => { vErr = e; },
+      });
+      venc.configure(vcfg);
+    };
+    const closeAll = () => {
+      streams.forEach(st => st.close());
+      streams.clear();
+      try { if (venc && venc.state !== 'closed') venc.close(); } catch {}
+    };
+    // 区切りまでのデータを端末に保存（ここまでは中断しても消えない）
+    const commit = async () => {
+      await venc.flush();
+      if (vErr) throw vErr;
+      await DB.put('files', expKey(job.parts), cur);
+      job.parts++;
+      job.done = n;
+      cur = [];
+      await DB.put('kv', 'exportJob', job);
+    };
+    const onHide = () => { if (document.hidden) hidden = true; };
+    document.addEventListener('visibilitychange', onHide);
+    try {
+      newEncoder();
+      let lastUi = 0;
+      while (n < N) {
+        if (cancelled) throw new Error('cancel');
+        if (hidden || document.hidden) {
+          // アプリが裏に回った：iPhoneは裏で圧縮・読み込みの機能を取り上げるので、戻ったら作り直して最後の区切りから再開
+          cleanRun = false;
+          setStatus(`一時停止中（${Math.round(job.done / N * 100)}%まで保存済み）：アプリに戻ると続きから再開します`);
+          closeAll();
+          await new Promise(r => { const f = () => { if (!document.hidden) { document.removeEventListener('visibilitychange', f); r(); } }; document.addEventListener('visibilitychange', f); f(); });
+          if (navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { wakeLock = l; }).catch(() => {});
+          hidden = false; n = job.done; newEncoder();
+          continue;
+        }
+        try {
+          if (n % GOP === 0 && n > job.done) await commit();
+          const t = n / OUT_FPS;
+          const active = [];
+          for (const g of items) {
+            const local = t - g.start;
+            const st = streams.get(g);
+            if (st && local >= g.len) { st.close(); streams.delete(g); }
+            if (local < 0 || local >= g.len) continue;
+            if (g.kind === 'card') { active.push({ g, src: null, local }); continue; }
+            const want = g.clip.in + local * g.clip.speed;
+            let s2 = streams.get(g);
+            if (!s2) { s2 = new FrameStream(await openDemux(g.clip.src), want); streams.set(g, s2); }
+            const src = await s2.frameAt(want);
+            if (src) active.push({ g, src, local });
+          }
+          if (cancelled) throw new Error('cancel');
+          if (hidden) continue;
+          renderFrame(R, active, t, total);
+          if (vErr) throw vErr;
+          const vf = new VideoFrame(cv, { timestamp: Math.round(t * 1e6), duration: Math.round(1e6 / OUT_FPS) });
+          venc.encode(vf, { keyFrame: n % GOP === 0 });
+          vf.close();
+          n++;
+          retries = 0;
+          while (venc.encodeQueueSize > 4) { await sleep(2); if (vErr) throw vErr; }
+        } catch (e) {
+          if (e && e.message === 'cancel') throw e;
+          if (hidden || document.hidden) { hidden = true; continue; }
+          if (++retries > 2) throw e;
+          console.warn('書き出しを最後の区切りからやり直します', e);
+          closeAll(); n = job.done; newEncoder();
+          continue;
+        }
+        const now = performance.now();
+        if (now - lastUi > 120) {
+          lastUi = now;
+          const pr = n / N, el = (now - t0) / 1000, speed = (n - startN) / Math.max(el, 0.001);
+          $('prog').value = pr;
+          setStatus(`保存中 ${Math.round(pr * 100)}%（${fmtT(n / OUT_FPS)} / ${fmtT(total)}）${n - startN > OUT_FPS ? `・残り約${Math.ceil((N - n) / speed)}秒` : ''}`);
+          await sleep(0); // 画面の更新と操作に時間をゆずる
+        }
+      }
+      await commit();
+    } finally {
+      document.removeEventListener('visibilitychange', onHide);
+      closeAll();
+    }
+    // 保存してある区切りを順に並べて1本にまとめる
+    setStatus('映像をまとめています…');
+    for (let k = 0; k < job.parts; k++) {
+      const part = await DB.get('files', expKey(k));
+      if (!part) throw new Error('保存の途中データが見つかりません');
+      part.forEach((c, i) => muxer.addVideoChunkRaw(new Uint8Array(c.data), c.type, c.ts, c.dur, k === 0 && i === 0 ? job.meta || undefined : undefined));
+    }
+  }
 
   try {
     // 1) 音
@@ -3322,133 +3630,145 @@ async function runOffline() {
       fastStart: false,
       firstTimestampBehavior: 'offset',
     });
-    let vErr = null;
-    const venc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => { vErr = e; } });
-    venc.configure(vcfg);
+    // 3) 映像
+    const direct = await prepareDirect(clipSegs);
+    lastExportPath = direct ? 'direct' : 'playback';
+    if (direct) {
+      try {
+        await directVideo(vcfg, muxer);
+      } catch (e) {
+        if (e && e.message !== 'cancel') e.direct = true;
+        throw e;
+      }
+    } else {
+      let vErr = null;
+      const venc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => { vErr = e; } });
+      venc.configure(vcfg);
 
-    // 3) 映像：各コマの時刻ぴったりの絵が出てから描いて圧縮する（出るまで待つ＝コマ飛び・重複なし）
-    const R = makeR(cv, s);
-    R.nClips = clipSegs.length;
-    R.beat = lastEdit && lastEdit.beat;
-    const N = Math.ceil(total * OUT_FPS);
-    const hasRVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
-    for (const p of players) {
-      if (p.rvfc || !hasRVFC) continue;
-      p.rvfc = true;
-      const cb = (now, meta) => {
-        p.mt = meta.mediaTime; p.mtSrc = p.v.currentSrc;
-        // 次に必要なコマが出た瞬間に止める（重い4Kでも映像が先に走り過ぎない＝コマ飛び・重複を防ぐ）
-        if (p.want != null && p.mt >= p.want - 0.5 / 30 && !p.v.paused && running && running.offline) { p.v.pause(); p.hold = true; }
+      // 3) 映像：各コマの時刻ぴったりの絵が出てから描いて圧縮する（出るまで待つ＝コマ飛び・重複なし）
+      const R = makeR(cv, s);
+      R.nClips = clipSegs.length;
+      R.beat = lastEdit && lastEdit.beat;
+      const N = Math.ceil(total * OUT_FPS);
+      const hasRVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
+      for (const p of players) {
+        if (p.rvfc || !hasRVFC) continue;
+        p.rvfc = true;
+        const cb = (now, meta) => {
+          p.mt = meta.mediaTime; p.mtSrc = p.v.currentSrc;
+          // 次に必要なコマが出た瞬間に止める（重い4Kでも映像が先に走り過ぎない＝コマ飛び・重複を防ぐ）
+          if (p.want != null && p.mt >= p.want - 0.5 / 30 && !p.v.paused && running && running.offline) { p.v.pause(); p.hold = true; }
+          p.v.requestVideoFrameCallback(cb);
+        };
         p.v.requestVideoFrameCallback(cb);
-      };
-      p.v.requestVideoFrameCallback(cb);
-    }
-    // 画面に出ているコマの時刻（前の素材の遅れて届いた報告は使わない）
-    const frameOf = (p) => hasRVFC && p.mt >= 0 && p.mtSrc === p.v.currentSrc && !p.v.seeking ? p.mt : p.v.currentTime;
-    let lastProgress = performance.now();
-    // 裏再生の速さ（実際の何倍か）。1コマ作るのにかかる時間を測り、コマを取りこぼさない範囲でいちばん速くする
-    let rate = px >= 2160 ? 0.25 : px >= 1440 ? 0.35 : 0.5;
-    let work = 0, safety = 1; // work: 1コマあたりの作業時間(ms)の平均、safety: コマ落ちを見つけたら下げる係数
-    let n = 0, paused = false;
-    const applyRate = () => { for (const p of players) if (p.seg && !p.v.paused) try { p.v.playbackRate = Math.max(0.07, p.seg.clip.speed * rate); } catch {} };
-    onVis = () => {
-      if (document.hidden) { paused = true; players.forEach(p => { p.v.pause(); p.hold = false; }); setStatus('一時停止中：アプリに戻ると自動で続きから再開します'); }
-      else if (paused && tickRef) {
-        paused = false;
-        lastProgress = performance.now();
-        for (const g of items) if (g.player && g.started && !g.done) g.player.v.play().catch(() => {});
-        running.raf = requestAnimationFrame(tickRef);
       }
-    };
-    document.addEventListener('visibilitychange', onVis);
-
-    const t0 = performance.now();
-    await new Promise((resolve, reject) => {
-      // 途中で思わぬエラーが起きても止まったままにせず、失敗として扱う（従来の方式で書き出し直す）
-      function tick() { try { step(); } catch (e) { reject(e); } }
-      function step() {
-        if (cancelled) return reject(new Error('cancel'));
-        if (vErr) return reject(vErr);
-        if (paused) return;
-        const tickStart = performance.now();
-        const tp = n / OUT_FPS; // ここまで作り終えた時刻
-        for (const g of items) {
-          if (g.done || g.kind === 'card') continue;
-          const local = tp - g.start;
-          if (!g.player && local > -2) { const p = players.find(p => !p.seg); if (p) { p.mt = -1; p.mtSrc = null; prepare(p, g); } }
-          const p = g.player;
-          if (!p) continue;
-          if (local >= g.len + 0.2) { g.done = true; release(p); continue; }
-          if (local >= -0.02 && p.ready && !g.started) { g.started = true; try { p.v.playbackRate = Math.max(0.07, g.clip.speed * rate); } catch {} p.v.play().catch(() => {}); }
-        }
-        let made = 0, waiting = false, dropped = false;
-        const maxMade = px >= 2160 ? 1 : px >= 1440 ? 2 : 4, maxQueue = px >= 2160 ? 2 : px >= 1440 ? 4 : 6;
-        if (performance.now() - lastProgress > 20000) return reject(new Error('stall'));
-        while (n < N && venc.encodeQueueSize < maxQueue && made < maxMade) {
-          const t = n / OUT_FPS;
-          const active = [];
-          for (const g of items) {
-            const local = t - g.start;
-            if (local < 0 || local >= g.len) continue;
-            if (g.kind === 'card') { active.push({ g, src: null, local }); continue; }
-            const p = g.player;
-            if (!(p && p.ready && g.started)) { waiting = true; break; }
-            const v = p.v, want = g.clip.in + local * g.clip.speed, have = frameOf(p);
-            const atEnd = v.ended || want >= (v.duration || 1e9) - 0.06;
-            const stuck = performance.now() - lastProgress > 3000; // 3秒進まなければ待つのをやめて先へ
-            if (!atEnd && !stuck && have < want - 0.5 / 30) { waiting = true; break; }   // まだそのコマが出ていない
-            if (have > want + 0.5 / 30 && !atEnd) {                                      // 必要なコマが飛ばされた（重くて再生側がコマ落ち）
-              dropped = true;
-              // 1コマにつき1回だけ、そのコマの位置へ戻って取り直す（重複・コマ飛びを出さない）
-              if (have < want + 0.4 && p.fixN !== n && !v.seeking) { p.fixN = n; v.pause(); p.hold = true; v.currentTime = want; waiting = true; break; }
-            }
-            if (have > want + 2.5 / 30) {                                                // 先に進みすぎ
-              if (have > want + 0.4 && !v.seeking && performance.now() - (p.lastSeek || 0) > 500) { p.lastSeek = performance.now(); v.currentTime = want; }
-            }
-            active.push({ g, src: v, local });
-          }
-          if (waiting) break;
-          renderFrame(R, active, t, total);
-          const vf = new VideoFrame(cv, { timestamp: Math.round(t * 1e6), duration: Math.round(1e6 / OUT_FPS) });
-          venc.encode(vf, { keyFrame: n % (OUT_FPS * 2) === 0 });
-          vf.close();
-          n++; made++;
+      // 画面に出ているコマの時刻（前の素材の遅れて届いた報告は使わない）
+      const frameOf = (p) => hasRVFC && p.mt >= 0 && p.mtSrc === p.v.currentSrc && !p.v.seeking ? p.mt : p.v.currentTime;
+      let lastProgress = performance.now();
+      // 裏再生の速さ（実際の何倍か）。1コマ作るのにかかる時間を測り、コマを取りこぼさない範囲でいちばん速くする
+      let rate = px >= 2160 ? 0.25 : px >= 1440 ? 0.35 : 0.5;
+      let work = 0, safety = 1; // work: 1コマあたりの作業時間(ms)の平均、safety: コマ落ちを見つけたら下げる係数
+      let n = 0, paused = false;
+      const applyRate = () => { for (const p of players) if (p.seg && !p.v.paused) try { p.v.playbackRate = Math.max(0.07, p.seg.clip.speed * rate); } catch {} };
+      onVis = () => {
+        if (document.hidden) { paused = true; players.forEach(p => { p.v.pause(); p.hold = false; }); setStatus('一時停止中：アプリに戻ると自動で続きから再開します'); }
+        else if (paused && tickRef) {
+          paused = false;
           lastProgress = performance.now();
+          for (const g of items) if (g.player && g.started && !g.done) g.player.v.play().catch(() => {});
+          running.raf = requestAnimationFrame(tickRef);
         }
-        // 流量の調整：映像が作業より先に進んだら一時停止して待ってもらい、追いついたら再開
-        for (const g of items) {
-          const p = g.player;
-          if (!p || !g.started || g.done || g.kind !== 'clip') continue;
-          const local = n / OUT_FPS - g.start;
-          if (local < 0 || local >= g.len) continue;
-          p.want = g.clip.in + local * g.clip.speed;
-          const lead = frameOf(p) - p.want;
-          if (lead > 1.5 / 30 && !p.v.paused) { p.v.pause(); p.hold = true; }
-          else if (p.hold && lead <= 0.5 / 30) { p.hold = false; p.v.play().catch(() => {}); }
+      };
+      document.addEventListener('visibilitychange', onVis);
+
+      const t0 = performance.now();
+      await new Promise((resolve, reject) => {
+        // 途中で思わぬエラーが起きても止まったままにせず、失敗として扱う（従来の方式で書き出し直す）
+        function tick() { try { step(); } catch (e) { reject(e); } }
+        function step() {
+          if (cancelled) return reject(new Error('cancel'));
+          if (vErr) return reject(vErr);
+          if (paused) return;
+          const tickStart = performance.now();
+          const tp = n / OUT_FPS; // ここまで作り終えた時刻
+          for (const g of items) {
+            if (g.done || g.kind === 'card') continue;
+            const local = tp - g.start;
+            if (!g.player && local > -2) { const p = players.find(p => !p.seg); if (p) { p.mt = -1; p.mtSrc = null; prepare(p, g); } }
+            const p = g.player;
+            if (!p) continue;
+            if (local >= g.len + 0.2) { g.done = true; release(p); continue; }
+            if (local >= -0.02 && p.ready && !g.started) { g.started = true; try { p.v.playbackRate = Math.max(0.07, g.clip.speed * rate); } catch {} p.v.play().catch(() => {}); }
+          }
+          let made = 0, waiting = false, dropped = false;
+          const maxMade = px >= 2160 ? 1 : px >= 1440 ? 2 : 4, maxQueue = px >= 2160 ? 2 : px >= 1440 ? 4 : 6;
+          if (performance.now() - lastProgress > 20000) return reject(new Error('stall'));
+          while (n < N && venc.encodeQueueSize < maxQueue && made < maxMade) {
+            const t = n / OUT_FPS;
+            const active = [];
+            for (const g of items) {
+              const local = t - g.start;
+              if (local < 0 || local >= g.len) continue;
+              if (g.kind === 'card') { active.push({ g, src: null, local }); continue; }
+              const p = g.player;
+              if (!(p && p.ready && g.started)) { waiting = true; break; }
+              const v = p.v, want = g.clip.in + local * g.clip.speed, have = frameOf(p);
+              const atEnd = v.ended || want >= (v.duration || 1e9) - 0.06;
+              const stuck = performance.now() - lastProgress > 3000; // 3秒進まなければ待つのをやめて先へ
+              if (!atEnd && !stuck && have < want - 0.5 / 30) { waiting = true; break; }   // まだそのコマが出ていない
+              if (have > want + 0.5 / 30 && !atEnd) {                                      // 必要なコマが飛ばされた（重くて再生側がコマ落ち）
+                dropped = true;
+                // 1コマにつき1回だけ、そのコマの位置へ戻って取り直す（重複・コマ飛びを出さない）
+                if (have < want + 0.4 && p.fixN !== n && !v.seeking) { p.fixN = n; v.pause(); p.hold = true; v.currentTime = want; waiting = true; break; }
+              }
+              if (have > want + 2.5 / 30) {                                                // 先に進みすぎ
+                if (have > want + 0.4 && !v.seeking && performance.now() - (p.lastSeek || 0) > 500) { p.lastSeek = performance.now(); v.currentTime = want; }
+              }
+              active.push({ g, src: v, local });
+            }
+            if (waiting) break;
+            renderFrame(R, active, t, total);
+            const vf = new VideoFrame(cv, { timestamp: Math.round(t * 1e6), duration: Math.round(1e6 / OUT_FPS) });
+            venc.encode(vf, { keyFrame: n % (OUT_FPS * 2) === 0 });
+            vf.close();
+            n++; made++;
+            lastProgress = performance.now();
+          }
+          // 流量の調整：映像が作業より先に進んだら一時停止して待ってもらい、追いついたら再開
+          for (const g of items) {
+            const p = g.player;
+            if (!p || !g.started || g.done || g.kind !== 'clip') continue;
+            const local = n / OUT_FPS - g.start;
+            if (local < 0 || local >= g.len) continue;
+            p.want = g.clip.in + local * g.clip.speed;
+            const lead = frameOf(p) - p.want;
+            if (lead > 1.5 / 30 && !p.v.paused) { p.v.pause(); p.hold = true; }
+            else if (p.hold && lead <= 0.5 / 30) { p.hold = false; p.v.play().catch(() => {}); }
+          }
+          // 速さの自動調整：次のコマが届く間隔が、1コマの作業時間より十分長くなるように（短いとコマ落ちする）
+          if (made) {
+            const w = (performance.now() - tickStart) / made;
+            work = work ? work * 0.85 + w * 0.15 : w;
+            if (dropped) safety = Math.max(0.3, safety * 0.8);
+            else safety = Math.min(1.5, safety * 1.02);
+            const want = clamp((1000 / 30) / (Math.max(work, 16) * 1.1) * safety, 0.07, 1); // 0.0625倍より遅い再生はブラウザが受け付けない
+            if (Math.abs(want - rate) / rate > 0.08) { rate = want; applyRate(); }
+          }
+          const el = (performance.now() - t0) / 1000, pr = n / N;
+          $('prog').value = pr;
+          setStatus(`なめらか書き出し中 ${Math.round(pr * 100)}%（${fmtT(n / OUT_FPS)} / ${fmtT(total)}）${pr > 0.05 ? `・残り約${Math.ceil(el / pr * (1 - pr))}秒` : ''}`);
+          if (n >= N) return resolve();
+          // 1コマの作業が重い端末では合間に少し休ませて、画面が固まらないようにする
+          if (work > 40) setTimeout(() => { running.raf = requestAnimationFrame(tick); }, Math.min(30, work * 0.3));
+          else running.raf = requestAnimationFrame(tick);
         }
-        // 速さの自動調整：次のコマが届く間隔が、1コマの作業時間より十分長くなるように（短いとコマ落ちする）
-        if (made) {
-          const w = (performance.now() - tickStart) / made;
-          work = work ? work * 0.85 + w * 0.15 : w;
-          if (dropped) safety = Math.max(0.3, safety * 0.8);
-          else safety = Math.min(1.5, safety * 1.02);
-          const want = clamp((1000 / 30) / (Math.max(work, 16) * 1.1) * safety, 0.07, 1); // 0.0625倍より遅い再生はブラウザが受け付けない
-          if (Math.abs(want - rate) / rate > 0.08) { rate = want; applyRate(); }
-        }
-        const el = (performance.now() - t0) / 1000, pr = n / N;
-        $('prog').value = pr;
-        setStatus(`なめらか書き出し中 ${Math.round(pr * 100)}%（${fmtT(n / OUT_FPS)} / ${fmtT(total)}）${pr > 0.05 ? `・残り約${Math.ceil(el / pr * (1 - pr))}秒` : ''}`);
-        if (n >= N) return resolve();
-        // 1コマの作業が重い端末では合間に少し休ませて、画面が固まらないようにする
-        if (work > 40) setTimeout(() => { running.raf = requestAnimationFrame(tick); }, Math.min(30, work * 0.3));
-        else running.raf = requestAnimationFrame(tick);
-      }
-      tickRef = tick;
-      running.raf = requestAnimationFrame(tick);
-    });
-    players.forEach(release);
-    await venc.flush();
-    venc.close();
+        tickRef = tick;
+        running.raf = requestAnimationFrame(tick);
+      });
+      players.forEach(release);
+      await venc.flush();
+      venc.close();
+    }
 
     // 4) 音を圧縮して入れる
     setStatus('音声を書き込んでいます…');
@@ -3459,14 +3779,24 @@ async function runOffline() {
     const first = clipSegs[0].clip.date;
     const name = `${first.getFullYear()}${pad(first.getMonth() + 1)}${pad(first.getDate())}_${(s.title || TPL[s.tpl].name).replace(/[\\/:*?"<>|\s（）()]+/g, '_')}.mp4`;
     showExportResult(blob, name);
-    DB.put('files', 'export', blob).then(() => DB.put('kv', 'exportName', name)).catch(() => {});
+    DB.put('files', 'export', blob).then(() => DB.put('kv', 'exportName', name)).catch(() => {}).then(clearExportJob);
     finished = true;
+    if (cleanRun && lastExportPath === 'direct' && total > 3) try { localStorage.setItem(`tsumugi.speed.${$('height').value}`, ((performance.now() - tStart) / 1000 / total).toFixed(2)); } catch {}
     cleanup();
-    setStatus('完了しました（なめらか書き出し）');
+    setStatus(lastExportPath === 'direct' ? '完了しました（高速書き出し）' : '完了しました（なめらか書き出し）');
     if (mode === 'pro') showTab('out');
   } catch (e) {
     if (!finished) cleanup();
-    if (e && e.message === 'cancel') { setStatus('書き出しを中止しました'); return; }
+    if (e && e.message === 'cancel') { clearExportJob(); setStatus('書き出しを中止しました'); return; }
+    if (e && e.direct) {
+      // 直接読み込みで失敗した時は、再生方式で書き出し直す
+      console.error(e);
+      directOff = true;
+      clearExportJob();
+      setStatus(`直接読み込みで保存できなかったため、別の方式で保存し直します…（${e.message || e}）`);
+      setTimeout(() => run({ record: true }), 300);
+      return;
+    }
     if (e && e.message === 'stall' && Number($('height').value) > 1080) {
       // 重すぎて進まない時は、画質を1段下げて自動でやり直す
       const next = Number($('height').value) >= 2160 ? '1440' : '1080';
@@ -3733,7 +4063,13 @@ renderLibrary();
 setMode('easy', 'setup');
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 checkOffline();
-restoreProject().catch(() => false).then((ok) => { booted = true; if (ok) setStatus('前回の続きを復元しました'); saveProject(); });
+restoreProject().catch(() => false).then(async (ok) => {
+  booted = true;
+  if (ok) setStatus('前回の続きを復元しました');
+  saveProject();
+  const job = ok && await DB.get('kv', 'exportJob').catch(() => null);
+  if (job && job.done) setStatus('前回の保存が途中で止まっています。「保存する」を押すと続きから再開します');
+});
 </script>
 </body>
 </html>
