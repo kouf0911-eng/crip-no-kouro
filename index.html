@@ -248,7 +248,7 @@
       <div class="hero">
         <h1 class="brand">Tsumugi<span>つむぎ</span></h1>
         <p>思い出の動画を、1本のムービーにつむぐ。<br>動画をえらんで、長さとテンプレを決めるだけです。</p>
-        <p class="ver">ver 22 ・ night　<button class="linkbtn" id="shareApp">🔗 アプリを共有</button><button class="linkbtn" id="resetAll" hidden>最初からやり直す</button></p>
+        <p class="ver">ver 23 ・ night　<button class="linkbtn" id="shareApp">🔗 アプリを共有</button><button class="linkbtn" id="resetAll" hidden>最初からやり直す</button></p>
       </div>
       <div class="panel step">
         <h2><b>1</b>動画をえらぶ <span id="eCount" class="count"></span></h2>
@@ -1939,7 +1939,7 @@ async function restoreProject() {
       const img = new Image();
       img.src = m.thumb;
       await img.decode().catch(() => {});
-      const c = { ...m, date: new Date(m.date), url: URL.createObjectURL(blob), frame: img, analyzing: null };
+      const c = { ...m, date: new Date(m.date), url: URL.createObjectURL(blob), blob, frame: img, analyzing: null };
       clips.push(c);
       byId[c.id] = c;
     }
@@ -2027,6 +2027,7 @@ $('files').onchange = async (e) => {
     try {
       const c = await loadClip(f);
       c.type = f.type;
+      c.blob = f; // 書き出しで中身を直接読むため、元のファイルを持っておく
       await storeFile(`clip:${c.id}`, f);
       clips.push(c);
       added.push(c);
@@ -3271,6 +3272,8 @@ let lastExportPath = '';    // 直近の書き出し方式（確認用）
 const demuxCache = new Map();
 const GOP = OUT_FPS * 2;    // 2秒ごとに区切って保存
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+// 決まった時間で終わらなければ失敗として扱う（端末の不具合で永久に止まらないように）
+const withTimeout = (p, ms, msg) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
 
 // ファイルの一番外側の箱（ftyp・moov・mdat）の位置を、中身を読まずに調べる
 async function topBoxes(blob) {
@@ -3292,7 +3295,9 @@ async function topBoxes(blob) {
 // 素材の目次（どのコマがファイルのどこにあるか）を読む。動画本体は読まない
 function openDemux(clip) {
   if (!demuxCache.has(clip.url)) demuxCache.set(clip.url, (async () => {
-    const blob = await fetch(clip.url).then(r => r.blob());
+    // 元のファイルをそのまま使う（blob URLを読み直すと、iPhoneでは動画全体がメモリに載って止まることがある）
+    const blob = clip.blob || await DB.get('files', `clip:${clip.id}`).catch(() => null);
+    if (!blob) throw new Error('素材のファイルが見つかりません');
     const boxes = await topBoxes(blob);
     if (!boxes.moov) throw new Error('目次(moov)が見つかりません');
     const f = MP4Box.createFile();
@@ -3344,7 +3349,8 @@ function openDemux(clip) {
 class FrameStream {
   constructor(dm, at) {
     this.dm = dm; this.frames = []; this.err = null; this.done = false; this.flushed = false; this.waiters = [];
-    this.dec = new VideoDecoder({ output: (fr) => { this.frames.push(fr); this.kick(); }, error: (e) => { this.err = e; this.kick(); } });
+    this.lastOut = performance.now();
+    this.dec = new VideoDecoder({ output: (fr) => { this.frames.push(fr); this.lastOut = performance.now(); this.kick(); }, error: (e) => { this.err = e; this.kick(); } });
     this.dec.configure({ ...dm.cfg, optimizeForLatency: true });
     // 指定時刻より前の、いちばん近いキーフレームから読み始める
     let i = 0;
@@ -3376,19 +3382,23 @@ class FrameStream {
   }
   async frameAt(t) {
     const T = Math.round(t * 1e6) + 1000;
-    for (let guard = 0; ; guard++) {
+    for (;;) {
       if (this.err) throw this.err;
       if (this.dec.state === 'closed') throw new Error('読み込みが中断されました');
       this.frames.sort((a, b) => a.timestamp - b.timestamp);
       while (this.frames.length > 1 && this.frames[1].timestamp <= T) this.frames.shift().close();
       // 次のコマまで出ていれば、今のコマが確定
       if (this.frames.some(fr => fr.timestamp > T) || (this.done && this.dec.decodeQueueSize === 0)) break;
-      if (!this.flushed && this.dec.decodeQueueSize < 6) await this.feed();
+      if (this.done) this.lastOut = performance.now();
+      // 多めに読み込まないと1コマ目を出さない端末もあるので、出てこない時は追加で送る（上限あり）
+      const starving = performance.now() - this.lastOut > 400 && this.dec.decodeQueueSize < 40;
+      if (!this.flushed && (this.dec.decodeQueueSize < 6 || starving)) await this.feed();
       else await this.wait(20);
-      if (guard > 5000) throw new Error('読み込みが進みません');
+      if (performance.now() - this.lastOut > 12000) throw new Error('素材の読み込みが進みません');
     }
     const fr = this.frames.filter(x => x.timestamp <= T).pop() || this.frames[0];
-    return fr ? this.view(fr) : null;
+    if (!fr) throw new Error('素材からコマを取り出せません'); // 黒い画面のまま進めない
+    return this.view(fr);
   }
   // 回転の指定がある動画は、正しい向きに直してから渡す
   view(fr) {
@@ -3417,7 +3427,7 @@ async function prepareDirect(clipSegs) {
   if (directOff || typeof VideoDecoder === 'undefined') return false;
   try {
     await loadScript('mp4box.js');
-    for (const g of clipSegs) await openDemux(g.clip.src);
+    for (const g of clipSegs) await withTimeout(openDemux(g.clip.src), 30000, '素材の目次を読めません');
     return true;
   } catch (e) {
     console.warn('直接読み込みは使えないため、再生方式で書き出します', e);
@@ -3488,7 +3498,12 @@ async function runOffline() {
     if (!job || job.sig !== sig || job.done > N) { await clearExportJob(); job = { sig, done: 0, parts: 0, meta: null }; }
     if (job.done > 0) cleanRun = false;
     if (job.done > 0) setStatus(`前回の続き（${Math.round(job.done / N * 100)}%）から再開します…`);
-    let n = job.done, venc = null, vErr = null, cur = [], hidden = false, retries = 0;
+    let n = job.done, venc = null, vErr = null, cur = [], hidden = false, retries = 0, stage = '', moved = performance.now();
+    // しばらく進まない時は、何を待っているかを表示する（不具合の調査用）
+    const watch = setInterval(() => {
+      const w = (performance.now() - moved) / 1000;
+      if (w > 4 && !hidden && !document.hidden) setStatus(`保存中 ${Math.round(n / N * 100)}%：${stage || '準備'}を待っています（${Math.round(w)}秒）`);
+    }, 1000);
     const startN = n, t0 = performance.now();
     const streams = new Map();
     const copyDesc = (d) => d ? (d.buffer ? new Uint8Array(d.buffer, d.byteOffset, d.byteLength) : new Uint8Array(d)).slice().buffer : undefined;
@@ -3516,9 +3531,11 @@ async function runOffline() {
     };
     // 区切りまでのデータを端末に保存（ここまでは中断しても消えない）
     const commit = async () => {
-      await venc.flush();
+      stage = '映像の圧縮';
+      await withTimeout(venc.flush(), 20000, '映像の圧縮が終わりません');
       if (vErr) throw vErr;
-      await DB.put('files', expKey(job.parts), cur);
+      stage = '途中データの保存';
+      await withTimeout(DB.put('files', expKey(job.parts), cur), 20000, '途中データを保存できません');
       job.parts++;
       job.done = n;
       cur = [];
@@ -3538,7 +3555,7 @@ async function runOffline() {
           closeAll();
           await new Promise(r => { const f = () => { if (!document.hidden) { document.removeEventListener('visibilitychange', f); r(); } }; document.addEventListener('visibilitychange', f); f(); });
           if (navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { wakeLock = l; }).catch(() => {});
-          hidden = false; n = job.done; newEncoder();
+          hidden = false; n = job.done; newEncoder(); moved = performance.now();
           continue;
         }
         try {
@@ -3553,26 +3570,35 @@ async function runOffline() {
             if (g.kind === 'card') { active.push({ g, src: null, local }); continue; }
             const want = g.clip.in + local * g.clip.speed;
             let s2 = streams.get(g);
+            stage = '素材の読み込み';
             if (!s2) { s2 = new FrameStream(await openDemux(g.clip.src), want); streams.set(g, s2); }
             const src = await s2.frameAt(want);
             if (src) active.push({ g, src, local });
           }
           if (cancelled) throw new Error('cancel');
           if (hidden) continue;
+          stage = '描画';
           renderFrame(R, active, t, total);
           if (vErr) throw vErr;
+          stage = '映像の圧縮';
           const vf = new VideoFrame(cv, { timestamp: Math.round(t * 1e6), duration: Math.round(1e6 / OUT_FPS) });
           venc.encode(vf, { keyFrame: n % GOP === 0 });
           vf.close();
           n++;
           retries = 0;
-          while (venc.encodeQueueSize > 4) { await sleep(2); if (vErr) throw vErr; }
+          moved = performance.now();
+          const qStart = performance.now();
+          while (venc.encodeQueueSize > 4) {
+            await sleep(2);
+            if (vErr) throw vErr;
+            if (performance.now() - qStart > 20000) throw new Error('映像の圧縮が進みません');
+          }
         } catch (e) {
           if (e && e.message === 'cancel') throw e;
           if (hidden || document.hidden) { hidden = true; continue; }
           if (++retries > 2) throw e;
           console.warn('書き出しを最後の区切りからやり直します', e);
-          closeAll(); n = job.done; newEncoder();
+          closeAll(); n = job.done; newEncoder(); moved = performance.now();
           continue;
         }
         const now = performance.now();
@@ -3586,6 +3612,7 @@ async function runOffline() {
       }
       await commit();
     } finally {
+      clearInterval(watch);
       document.removeEventListener('visibilitychange', onHide);
       closeAll();
     }
